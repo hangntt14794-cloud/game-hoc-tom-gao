@@ -767,6 +767,7 @@ function buildItems(game, cfg) {
   return pickItems(game, cfg, gamePool(game, cfg));
 }
 
+const TEAMS = [{ name: 'Đội Sao', icon: '⭐' }, { name: 'Đội Trăng', icon: '🌙' }, { name: 'Đội Mặt Trời', icon: '☀️' }];
 const PRAISE = ['Giỏi quá!', 'Đúng rồi!', 'Tuyệt vời!', 'Làm tốt lắm!', 'Chính xác!', 'Siêu quá!'];
 const RETRY = ['Chưa đúng, thử lại nhé!', 'Gần đúng rồi, thử lại nào!', 'Cố lên, con làm được!'];
 
@@ -775,7 +776,7 @@ class Session {
   constructor(game, cfg, items, host, onExit) {
     this.game = game; this.cfg = cfg; this.items = items; this.host = host; this.onExit = onExit;
     this.idx = -1; this.score = 0; this.xp = 0; this.streak = 0; this.best = 0; this.skipped = 0; this.wrongs = [];
-    this.t0 = Date.now(); this.struggling = !!cfg.struggle; this.dwell = new Dwell(); this.mouse = { x: 0, y: 0, inside: false };
+    this.t0 = Date.now(); this.nTeams = cfg.teams > 1 ? Math.min(3, cfg.teams) : 0; this.tscore = [0, 0, 0]; this.struggling = !!cfg.struggle; this.dwell = new Dwell(); this.mouse = { x: 0, y: 0, inside: false };
     this.engine = null; this.locked = false; this.finished = false; this.last = 0; this.trail = []; this.timers = []; this.camWarned = false; this.camOn = !!cfg.cam;
   }
   get item() { return this.items[this.idx]; }
@@ -783,7 +784,7 @@ class Session {
   mount() {
     const g = this.game, sub = SUBJECTS[g.subject];
     this.host.innerHTML = `<section class="stage ${g.subject}" id="stage" aria-label="${esc(g.name)}">
-      <div class="hud"><div class="t">${g.icon} ${esc(g.name)}</div><span class="pill" id="h-q"></span><span class="pill" id="h-s">⭐ 0</span><span class="pill" id="h-k">🔥 0</span><span class="pill" id="h-t">0:00</span><div class="prog"><i id="h-p"></i></div></div>
+      <div class="hud"><div class="t">${g.icon} ${esc(g.name)}</div><span class="pill" id="h-q"></span><span class="pill" id="h-team" ${this.nTeams ? '' : 'hidden'}></span><span class="pill" id="h-s" ${this.nTeams ? 'hidden' : ''}>⭐ 0</span><span class="pill" id="h-k">🔥 0</span><span class="pill" id="h-t">0:00</span><div class="prog"><i id="h-p"></i></div></div>
       <div class="qbar"><div class="qtext" id="qtext"></div><button class="say" id="say" title="Đọc to" aria-label="Đọc to">🔊</button></div>
       <div class="play" id="play"></div>
       <div class="stage-foot"><span class="muted" id="foot-msg"></span><span class="row" style="gap:8px"><button class="btn sec sm" id="skip">Bỏ qua câu này</button><button class="btn sec sm" id="exit">Thoát</button></span></div>
@@ -840,21 +841,23 @@ class Session {
     this.idx++; if (this.idx >= this.items.length) return this.finish();
     this.locked = false; this.mistakes = 0; this.logged = false; this.qStart = performance.now(); this.play.className = 'play'; this.play.onclick = null;
     $('#h-q').textContent = `Câu ${this.idx + 1}/${this.items.length}`; $('#h-p').style.width = (this.idx / this.items.length * 100) + '%';
-    $('#h-s').textContent = '⭐ ' + this.score; $('#h-k').textContent = '🔥 ' + this.streak;
+    $('#h-s').textContent = '⭐ ' + this.score; $('#h-k').textContent = '🔥 ' + this.streak; this.teamHud();
     const E = EngineMap[this.game.engine === 'auto' ? autoEngine(this.item) : this.game.engine];
     this.engine = new E(this); this.engine.mount();
     if (Settings.v.autoRead && this.game.engine !== 'maze') this.later(() => this.say(), 300);
   }
+  get turn() { return this.nTeams ? this.idx % this.nTeams : -1; }
+  teamHud() { const h = $('#h-team'); if (!h || !this.nTeams) return; h.innerHTML = `Lượt: <b>${TEAMS[this.turn].icon} ${TEAMS[this.turn].name}</b> · ` + TEAMS.slice(0, this.nTeams).map((t, i) => `${t.icon} ${this.tscore[i]}`).join(' · '); }
   skip() { if (this.locked || this.finished) return; this.skipped++; this.next(); }
   log(correct) {
-    this.logged = true; const q = this.item; if (!State.student || q.type === 'maze' || q.gen) return;
+    this.logged = true; const q = this.item; if (!State.student || this.nTeams || q.type === 'maze' || q.gen) return;
     const r = { id: uid(), studentId: State.student, qid: q.id, subject: q.subject, topic: q.topic, correct, ts: Date.now(), ms: Math.round(performance.now() - this.qStart), game: this.game.id };
     State.results.push(r); Save.run(() => db.put('results', r));
   }
   right() {
     if (this.locked || this.finished) return; this.locked = true; this.play.classList.add('locked'); this.dwell.clear();
     const first = this.mistakes === 0; if (!this.logged) this.log(true);
-    if (first) { this.score++; this.streak++; this.best = Math.max(this.best, this.streak); this.xp += 10; } else { this.xp += 4; this.streak = 0; if (this.item.type !== 'maze' && !this.item.gen) this.wrongs.push({ q: this.item, shown: false }); }
+    if (first) { this.score++; if (this.nTeams) { this.tscore[this.turn]++; this.teamHud(); } this.streak++; this.best = Math.max(this.best, this.streak); this.xp += 10; } else { this.xp += 4; this.streak = 0; if (this.item.type !== 'maze' && !this.item.gen) this.wrongs.push({ q: this.item, shown: false }); }
     $('#h-s').textContent = '⭐ ' + this.score; $('#h-k').textContent = '🔥 ' + this.streak; Sfx.ok();
     this.fb('ok', PRAISE[Math.floor(Math.random() * PRAISE.length)], this.item.explain); this.later(() => this.next(), this.item.explain ? 2200 : 1300);
   }
@@ -872,17 +875,21 @@ class Session {
   finish() {
     this.finished = true; this.clearFb(); const n = this.items.length; const dur = Math.round((Date.now() - this.t0) / 1000); const ratio = n ? this.score / n : 0;
     const stars = ratio >= .8 ? 3 : ratio >= .5 ? 2 : 1; $('#h-p').style.width = '100%';
-    if (State.student) { const rec = { id: uid(), studentId: State.student, gameId: this.game.id, subject: this.game.review ? 'review' : this.game.subject, score: this.score, total: n, xp: this.xp, best: this.best, started: this.t0, duration: dur }; State.sessions.push(rec); Save.run(() => db.put('sessions', rec)); }
+    if (State.student && !this.nTeams) { const rec = { id: uid(), studentId: State.student, gameId: this.game.id, subject: this.game.review ? 'review' : this.game.subject, score: this.score, total: n, xp: this.xp, best: this.best, started: this.t0, duration: dur }; State.sessions.push(rec); Save.run(() => db.put('sessions', rec)); }
     LS.set('recent', [this.game.id, ...LS.get('recent', []).filter(x => x !== this.game.id)].slice(0, 6));
     Sfx.win(); if (this.engine) { this.engine.destroy && this.engine.destroy(); this.engine = null; }
     $('#qtext').innerHTML = ''; $('#say').style.display = 'none'; $('#skip').style.display = 'none';
     const wl = this.wrongs.slice(0, 8).map(w => `<li><b>${esc(qSummary(w.q))}</b>${w.q.explain ? `<br><span class="muted">${esc(w.q.explain)}</span>` : ''}</li>`).join('');
     this.play.className = 'play'; this.play.innerHTML = `<div class="result"><div class="stars">${[1, 2, 3].map(i => `<span class="${i <= stars ? '' : 'off'}">⭐</span>`).join('')}</div>
-      <h2>${this.timeUp ? 'Hết giờ! ' : ''}${stars === 3 ? 'Xuất sắc!' : stars === 2 ? 'Làm tốt lắm!' : 'Con đã cố gắng rất tốt!'}</h2>${this.cfg.note ? `<p class="muted">${esc(this.cfg.note)}</p>` : ''}
+      ${this.nTeams ? this.teamBoard() : ''}<h2>${this.nTeams ? 'Kết thúc lượt chơi đội!' : (this.timeUp ? 'Hết giờ! ' : '') + (stars === 3 ? 'Xuất sắc!' : stars === 2 ? 'Làm tốt lắm!' : 'Con đã cố gắng rất tốt!')}</h2>${this.nTeams ? '<p class="muted">Chế độ chơi theo đội không ghi vào hồ sơ học sinh.</p>' : ''}${this.cfg.note ? `<p class="muted">${esc(this.cfg.note)}</p>` : ''}
       <div class="nums2"><span class="chip ok">Đúng ngay lần đầu: ${this.score}/${n}</span><span class="chip">+${this.xp} điểm kinh nghiệm</span><span class="chip">Chuỗi đúng dài nhất: ${this.best}</span><span class="chip">Thời gian: ${fmtTime(dur)}</span>${this.skipped ? `<span class="chip warn">Bỏ qua: ${this.skipped}</span>` : ''}</div>
       ${wl ? `<div class="wrongs card"><h3>Cùng ôn lại nhé</h3><ul>${wl}</ul></div>` : ''}
       <div class="row" style="justify-content:center"><button class="btn go" id="again">▶ Chơi lại</button><button class="btn sec" id="back">Về thư viện trò chơi</button></div></div>`;
     $('#again').onclick = () => App.restart(this); $('#back').onclick = () => this.exit();
+  }
+  teamBoard() {
+    const t = TEAMS.slice(0, this.nTeams).map((x, i) => ({ ...x, s: this.tscore[i] })), mx = Math.max(...t.map(x => x.s)), win = t.filter(x => x.s === mx);
+    return `<div class="card" style="min-width:min(420px,100%)"><h3>${win.length > 1 ? '🤝 Hòa nhau!' : '🏆 ' + win[0].icon + ' ' + win[0].name + ' chiến thắng!'}</h3><div class="bars" style="margin-top:10px">${t.map(x => `<div class="bar" style="--c:var(--eng);grid-template-columns:130px 1fr 40px"><span>${x.icon} ${x.name}</span><div class="track"><div class="fill" style="width:${pct(x.s, Math.max(1, mx))}%"></div></div><span>${x.s}</span></div>`).join('')}</div></div>`;
   }
   teardown(keepCam) {
     cancelAnimationFrame(this.raf); this.timers.forEach(clearTimeout); this.timers = [];
@@ -1190,13 +1197,14 @@ const App = {
       <div class="row"><label class="field">Số ${g.engine === 'maze' ? 'màn' : 'câu'}<select id="su-n">${ns.map(n => `<option ${n === saved.n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       ${g.noBank || lesson ? '' : `<label class="field">Nhóm lớp<select id="su-g">${Object.entries(GRADE_GROUPS).map(([k, v]) => `<option value="${k}" ${k === cfg0.group ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></label>`}
       ${lesson ? '' : '<label class="field">Độ khó<select id="su-d"><option value="0">Tất cả</option><option value="1">Dễ</option><option value="2">Vừa</option><option value="3">Khó</option></select></label>'}${(g.opts || []).map(o => `<label class="field">${esc(o.label)}<select id="su-o-${o.key}">${o.vals.map(([v, t]) => `<option value="${v}" ${v === o.def ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`).join('')}</div>
+      <label class="field" style="max-width:260px">Chế độ chơi<select id="su-t"><option value="0">Cá nhân</option><option value="2">2 đội thay phiên</option><option value="3">3 đội thay phiên</option></select><small>Chơi theo đội không ghi vào hồ sơ học sinh.</small></label>
       ${g.noBank || !st || g.review ? '' : '<label class="switch"><input type="checkbox" id="su-w">Chỉ ôn các câu từng làm sai</label>'}
       ${g.noBank || lesson || g.review ? '' : '<label class="switch"><input type="checkbox" id="su-a" checked>Tự điều chỉnh độ khó và gợi ý theo kết quả gần đây của em</label>'}
       <div class="seg" role="radiogroup" aria-label="Cách điều khiển"><label><input type="radio" name="su-c" value="mouse" ${saved.cam ? '' : 'checked'}><span>🖱️ Chuột / cảm ứng<small>Không cần camera</small></span></label><label><input type="radio" name="su-c" value="cam" ${saved.cam ? 'checked' : ''}><span>${g.pose ? '🕺 Webcam (nhận diện cơ thể)' : '🖐️ Webcam (bàn tay)'}<small>Cần quyền camera, internet lần đầu${g.pose ? '; đứng hoặc ngồi lùi ra để thấy đầu và hai vai' : ''}</small></span></label></div>
       ${g.needsVoice && !Speech.ok ? '<div class="msg warn">Thiết bị này không có giọng đọc. Từ tiếng Anh sẽ hiện bằng chữ thay vì đọc to.</div>' : ''}
       <div id="su-avail" class="msg info"></div><div id="su-err"></div>
       <div class="acts"><button class="btn sec" data-act="closemodal">Hủy</button><button class="btn go" id="su-go">▶ Bắt đầu chơi</button></div>`);
-    const read = () => ({ n: +$('#su-n').value, group: $('#su-g') ? $('#su-g').value : 'all', diff: $('#su-d') ? +$('#su-d').value : 0, lesson: lesson ? lesson.id : '', wrongOnly: !!($('#su-w') && $('#su-w').checked), cam: $('input[name=su-c]:checked').value === 'cam', adaptive: !$('#su-a') || $('#su-a').checked, pose: !!g.pose, ...Object.fromEntries((g.opts || []).map(o => [o.key, +$('#su-o-' + o.key).value])) });
+    const read = () => ({ n: +$('#su-n').value, group: $('#su-g') ? $('#su-g').value : 'all', diff: $('#su-d') ? +$('#su-d').value : 0, lesson: lesson ? lesson.id : '', wrongOnly: !!($('#su-w') && $('#su-w').checked), cam: $('input[name=su-c]:checked').value === 'cam', adaptive: !$('#su-a') || $('#su-a').checked, teams: +$('#su-t').value, pose: !!g.pose, ...Object.fromEntries((g.opts || []).map(o => [o.key, +$('#su-o-' + o.key).value])) });
     const upd = () => { const c = read(); const n = g.noBank ? c.n : gamePool(g, c).length; $('#su-avail').textContent = g.noBank ? 'Nội dung được tạo ngẫu nhiên mỗi lần chơi.' : (n ? `Có ${n} câu phù hợp (chỉ dùng câu đã duyệt).` : 'Chưa có câu hỏi đã duyệt phù hợp. Hãy đổi nhóm lớp/độ khó hoặc thêm câu hỏi trong Ngân hàng câu hỏi.'); $('#su-go').disabled = !g.noBank && !n; };
     $$('#modal select, #modal input').forEach(el => el.addEventListener('change', upd)); upd();
     $('#su-go').onclick = async () => {
@@ -1239,10 +1247,16 @@ const App = {
   }
 };
 
+/* ---------- Mật khẩu giáo viên (chặn thao tác vô tình của học sinh, không phải bảo mật cao) ---------- */
+async function sha(s) { try { if (crypto && crypto.subtle) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('kls|' + s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); } } catch (e) { /* dùng bản đơn giản */ } let h = 5381; for (const c of 'kls|' + s) h = ((h << 5) + h + c.charCodeAt(0)) | 0; return 'x' + h; }
+function askPin(title) {
+  return new Promise(res => { const d = $('#ask'); let done = false; d.innerHTML = `<div class="dlg"><h3>${esc(title)}</h3><input id="pin-in" type="password" inputmode="numeric" autocomplete="off" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:1.3rem;text-align:center"><div class="acts"><button class="btn sec" data-r="0">Hủy</button><button class="btn" data-r="1">OK</button></div></div>`;
+    const fin = ok => { if (done) return; done = true; const v = $('#pin-in').value; d.close(); res(ok ? v : null); }; d.onclick = e => { const b = e.target.closest('[data-r]'); if (b) fin(b.dataset.r === '1'); }; d.onkeydown = e => { if (e.key === 'Enter') fin(true); }; d.onclose = () => { if (!done) { done = true; res(null); } }; d.showModal(); $('#pin-in').focus(); });
+}
 /* ---------- Sự kiện chung ---------- */
 Object.assign(Act, {
   nav: el => App.go(el.dataset.v),
-  mode: () => { State.mode = State.mode === 'teacher' ? 'student' : 'teacher'; LS.set('mode', State.mode); App.renderTop(); App.go(State.mode === 'student' && ['bank', 'students', 'settings', 'docs', 'generate', 'lessons', 'lessonedit'].includes(State.view) ? 'dashboard' : State.view); toast(State.mode === 'teacher' ? 'Chế độ giáo viên' : 'Chế độ học sinh: ẩn phần quản lý'); },
+  mode: async () => { if (State.mode === 'student') { const pin = LS.get('pin', null); if (pin) { const v = await askPin('Nhập mật khẩu giáo viên'); if (v == null) return; if (await sha(v) !== pin) return toast('Sai mật khẩu', 'err'); } } State.mode = State.mode === 'teacher' ? 'student' : 'teacher'; LS.set('mode', State.mode); App.renderTop(); App.go(State.mode === 'student' && ['bank', 'students', 'settings', 'docs', 'generate', 'lessons', 'lessonedit'].includes(State.view) ? 'dashboard' : State.view); toast(State.mode === 'teacher' ? 'Chế độ giáo viên' : 'Chế độ học sinh: ẩn phần quản lý'); },
   play: el => App.openSetup(el.dataset.id),
   fav: el => { const f = LS.get('favs', []); const i = f.indexOf(el.dataset.id); if (i >= 0) f.splice(i, 1); else f.push(el.dataset.id); LS.set('favs', f); if (State.view === 'dashboard') App.go('dashboard'); else App.refreshLib(); },
   closemodal: () => Modal.close(),
@@ -1528,6 +1542,7 @@ const SettingsView = {
         <label class="field">Tốc độ bóng rơi (Bảng cửu chương)${rng('ballSpeed', 20, 200, 5, ' px/giây')}</label>
         <label class="field">Số lần được thử mỗi câu<small>Sau số lần này, ứng dụng hiện đáp án đúng và chuyển câu.</small>${rng('maxTries', 1, 4, 1, ' lần')}</label>
         ${sw('sound', 'Âm thanh hiệu ứng')}${sw('speech', 'Giọng đọc (đọc câu hỏi, đọc từ tiếng Anh)')}${sw('autoRead', 'Tự động đọc câu hỏi khi bắt đầu câu mới')}<p class="muted">Không có bảng xếp hạng giữa các học sinh. Kết quả cá nhân chỉ hiện trong báo cáo của từng em.</p></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Mật khẩu chế độ giáo viên</h2><p class="muted">${LS.get('pin', null) ? 'Đang bật: khi chuyển từ chế độ học sinh sang giáo viên sẽ hỏi mật khẩu.' : 'Chưa đặt. Đặt mật khẩu để học sinh không tự mở phần quản lý.'} Lưu ý: đây là khóa đơn giản trong trình duyệt, đủ để ngăn thao tác vô tình của trẻ, không phải bảo mật cao.</p><div class="row"><label class="field">Mật khẩu mới (4–8 ký tự)<input id="pin-a" type="password" autocomplete="off"></label><label class="field">Nhập lại<input id="pin-b" type="password" autocomplete="off"></label></div><div class="row"><button class="btn sm" data-act="pinset">Lưu mật khẩu</button>${LS.get('pin', null) ? '<button class="btn sec sm" data-act="pinoff">Tắt mật khẩu</button>' : ''}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Phần thưởng</h2><p class="muted">Học sinh mở khóa phần thưởng khi đủ điểm kinh nghiệm (mỗi câu đúng ngay lần đầu +10). Điểm không bao giờ bị trừ.</p>${Rewards.list().map(r => `<div class="row" style="justify-content:space-between"><span>${esc(r.icon)} <b>${esc(r.name)}</b> · ${r.xp} điểm</span><button class="btn warn sm" data-act="rwdel" data-id="${r.id}">Xóa</button></div>`).join('') || '<span class="muted">Chưa có phần thưởng.</span>'}<div class="row"><label class="field" style="max-width:70px">Biểu tượng<input id="rw-i" value="🎁" maxlength="4"></label><label class="field">Tên phần thưởng<input id="rw-n"></label><label class="field" style="max-width:110px">Điểm cần<input id="rw-x" type="number" min="10" value="100"></label></div><div><button class="btn sm" data-act="rwadd">＋ Thêm phần thưởng</button></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:12px"><h2>Dữ liệu</h2><div id="storinfo" class="msg info">Đang kiểm tra dung lượng…</div>
         <p class="muted">Dữ liệu nằm trong trình duyệt của máy này (IndexedDB). Không đồng bộ giữa các thiết bị: hãy sao lưu định kỳ.</p>
@@ -1545,6 +1560,8 @@ const onSet = e => {
 document.addEventListener('input', e => { if (e.target.type === 'range') onSet(e); });
 document.addEventListener('change', e => { if (e.target.id === 'rp-per') { Reports.period = e.target.value; Reports.view(); } }); document.addEventListener('change', e => { if (e.target.matches('[data-set]')) onSet(e); });
 Object.assign(Act, {
+  pinset: async () => { const a = $('#pin-a').value, b = $('#pin-b').value; if (a.length < 4 || a.length > 8) return toast('Mật khẩu cần 4–8 ký tự', 'err'); if (a !== b) return toast('Hai lần nhập chưa giống nhau', 'err'); LS.set('pin', await sha(a)); toast('Đã đặt mật khẩu giáo viên', 'ok'); SettingsView.view(); },
+  pinoff: () => { LS.set('pin', null); toast('Đã tắt mật khẩu', 'ok'); SettingsView.view(); },
   rwadd: () => { const n = nfc($('#rw-n').value.trim()), x = parseInt($('#rw-x').value, 10); if (!n || !(x >= 10)) return toast('Hãy nhập tên và số điểm (từ 10)', 'err'); Rewards.save([...Rewards.list(), { id: uid(), icon: $('#rw-i').value.trim() || '🎁', name: n, xp: x }]); SettingsView.view(); },
   rwdel: el => { Rewards.save(Rewards.list().filter(r => r.id !== el.dataset.id)); SettingsView.view(); },
   camrefresh: async () => { await cam.refreshDevices(); SettingsView.view(); toast(cam.devices.length ? `Tìm thấy ${cam.devices.length} camera` : 'Không thấy camera (hãy cấp quyền bằng nút Kiểm tra camera)'); },
@@ -1590,6 +1607,7 @@ App.init = async function () {
   if (!State.students.some(s => s.id === State.student)) { State.student = State.students[0] ? State.students[0].id : null; LS.set('student', State.student); }
   $('#imp').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) Bank.importFile(f); };
   $('#rst').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) Data.restore(f); };
+  if (LS.get('pin', null) && State.mode === 'teacher' && !sessionStorage.getItem('kls_unlocked')) { State.mode = 'student'; LS.set('mode', 'student'); }
   this.renderTop(); this.go('dashboard');
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { if (e.quota && e.usage / e.quota > .8) toast('Dung lượng lưu trữ sắp đầy. Hãy sao lưu và xóa bớt dữ liệu.', 'err'); }).catch(() => { });
 };
@@ -1678,16 +1696,19 @@ const Extract = {
     const lib = await Libs.pdf(); const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise; const pages = [], warn = []; let ocrN = 0, ocrFail = false;
     for (let i = 1; i <= doc.numPages; i++) {
       prog && prog(`PDF: đọc trang ${i}/${doc.numPages}`); const pg = await doc.getPage(i); let text = this.itemsToText((await pg.getTextContent()).items), ocr = false, img = null;
-      if (text.replace(/\s/g, '').length < 20) {
-        if (ocrN >= 20) { warn.push(`Trang ${i}: không có chữ và đã quá 20 trang OCR, bỏ qua.`); }
-        else if (!ocrFail) {
-          try { const vp = pg.getViewport({ scale: 2 }); const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext('2d'), canvas: cv, viewport: vp }).promise; img = scaleCanvas(cv, 1000).toDataURL('image/jpeg', .75); text = await this.ocr(cv, prog); ocr = true; ocrN++; }
-          catch (e) { ocrFail = true; warn.push('Trang scan cần OCR nhưng không chạy được: ' + e.message); }
+      const nChars = text.replace(/\s/g, '').length;
+      if (nChars < 150) { // trang ít chữ: nhiều khả năng đề bài là ảnh -> lưu ảnh trang và nhận chữ bằng OCR
+        if (ocrN >= 40) { warn.push(`Trang ${i}: ít chữ nhưng đã quá 40 trang OCR, bỏ qua.`); }
+        else {
+          try {
+            const vp = pg.getViewport({ scale: 2.5 }); const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; await pg.render({ canvasContext: cv.getContext('2d'), canvas: cv, viewport: vp }).promise; img = scaleCanvas(cv, 1400).toDataURL('image/jpeg', .8);
+            if (!ocrFail) { prog && prog(`PDF: trang ${i} ít chữ, đang nhận chữ bằng OCR…`); const t = await this.ocr(cv, prog); ocrN++; if (t.replace(/\s/g, '').length > nChars) { text = t; ocr = true; } }
+          } catch (e) { ocrFail = true; warn.push(`Trang ${i} ít chữ và OCR không chạy được: ${e.message} Bạn có thể bấm “OCR lại” ở trang đó khi có internet.`); }
         }
       }
       pages.push({ label: 'Trang ' + i, text, ocr, img });
     }
-    if (ocrN) warn.push(`${ocrN} trang là bản scan được nhận chữ bằng OCR. Chữ có thể sai, bắt buộc kiểm tra.`);
+    if (pages.some(p => p.ocr)) warn.push(`${pages.filter(p => p.ocr).length} trang được nhận chữ bằng OCR (trang ít chữ hoặc bản scan). Chữ có thể sai, bắt buộc kiểm tra trước khi tạo câu hỏi.`);
     return { pages, warnings: warn };
   },
   async image(file, prog) {
@@ -1710,12 +1731,19 @@ const ANS = /(?:đáp\s*án|dap\s*an|đ\s*\/\s*a|answer|ans|key)\s*(?:đúng)?\s
 
 const Generator = {
   run(doc, pages) {
-    const L = []; pages.forEach(pg => pg.text.split('\n').forEach(t => { t = nfc(t).replace(/[ \u00a0]+/g, ' ').replace(/ ?\t ?/g, '\t').trim(); if (t) L.push({ t, p: pg.label, ocr: pg.ocr, img: pg.img, used: false }); }));
+    const L = []; pages.forEach(pg => pg.text.split('\n').forEach(t => { t = nfc(t).replace(/[ \u00a0]+/g, ' ').replace(/ ?\t ?/g, '\t').trim(); t = this.clean(t, pg.ocr); if (t) L.push({ t, p: pg.label, ocr: pg.ocr, img: pg.img, used: false }); }));
     const ctx = { doc, L, out: [] };
     this.mcq(ctx); this.arith(ctx); this.tf(ctx); this.cloze(ctx); this.vocab(ctx); this.words(ctx); this.sentences(ctx);
     const have = new Set(State.questions.filter(q => !q.deleted).map(qKey)); const seen = new Set();
     ctx.out.forEach(d => { const k = qKey(d.q); if (have.has(k)) d.flags.push('Trùng với câu đã có trong ngân hàng'); if (seen.has(k)) { d.flags.push('Trùng với câu khác trong lần tạo này'); d.sel = false; } seen.add(k); });
     return { drafts: ctx.out.slice(0, 300), unrec: L.filter(l => !l.used), total: L.length, capped: ctx.out.length > 300 };
+  },
+  /** Chuẩn hóa ký tự hay bị nhận nhầm (OCR, Word, PDF) để các quy tắc nhận dạng bắt được nhiều hơn. */
+  clean(t, ocr) {
+    t = t.replace(/[＋]/g, '+').replace(/[—‒−]/g, '-').replace(/[＝﹦]/g, '=').replace(/[×✕✖⨯]/g, '×').replace(/[÷➗]/g, '÷').replace(/[‘’´`]/g, "'").replace(/^[•·●▪■□◆▶►\-–]\s+(?=\S)/, '');
+    t = t.replace(/^(?:bài|bai)\s*(\d{1,3})\s*[.:)\-]\s*(?=\S)/i, '$1. ').replace(/^(\d{1,3})\s*[\/\]]\s*(?=\S)/, '$1. ');
+    if (ocr) { t = t.replace(/(\d)\s*[xX]\s*(?=\d)/g, '$1 × ').replace(/(\d)\s*[:;]\s*(?=\d+\s*=)/g, '$1 ÷ ').replace(/\s*=\s*[?7](?=\s*$)/, ' = ?').replace(/\b[Oo](?=\d)|(?<=\d)[Oo]\b/g, '0'); }
+    return t;
   },
   mk(ctx, line, subject, fields, flags = [], kind = '') {
     const doc = ctx.doc; flags = flags.slice(); if (line.ocr) flags.push('OCR – có thể sai chữ, hãy đối chiếu bản gốc');
@@ -1732,10 +1760,10 @@ const Generator = {
       if (mi > 0) { const inl = this.splitInline(stem.slice(mi + 1)); if (inl.length >= 2) { inl.forEach(x => opts.push(x)); stem = stem.slice(0, mi).trim(); } }
       if (!opts.length) { while (j < L.length && j - i <= 3 && !L[j].used && !OPT.test(L[j].t) && !STEM.test(L[j].t)) { stem += ' ' + L[j].t; j++; } }
       while (j < L.length && !L[j].used) {
-        const t = L[j].t, o = t.match(OPT); if (!o) break; const inl = /^\(?[Aa][.)]\s+.+\s\(?[Bb][.)]\s+/.test(t) ? this.splitInline(t) : null;
+        const t = L[j].t, o = t.match(OPT); if (!o || /=/.test(o[2])) break; const inl = /^\(?[Aa][.)]\s+.+\s\(?[Bb][.)]\s+/.test(t) ? this.splitInline(t) : null;
         const add = inl && inl.length >= 2 ? inl : [[o[1], o[2]]]; let bad = false; add.forEach(([l, x]) => { if (l.toUpperCase() !== 'ABCDEF'[opts.length]) bad = true; else opts.push([l, x]); }); if (bad) break; j++;
       }
-      if (opts.length < 2) continue;
+      if (opts.length < 2 || (stem.replace(/\s/g, '').length < 8 && !/[?:]/.test(stem))) continue;
       const last = Math.min(L.length, j + 2); for (let k = j; k < last && k < L.length; k++) { if (L[k].used) break; const a = L[k].t.match(ANS); if (a) { ans = 'ABCDEF'.indexOf(a[1].toUpperCase()); L[k].used = true; j = k + 1; break; } if (STEM.test(L[k].t)) break; }
       const texts = opts.map(([, x], idx) => { let s = x; const mk = s.match(/\s*(\(đúng\)|\(correct\)|✓|✔|\*)\s*$/i) || null; if (mk) { s = s.slice(0, mk.index).trim(); ans = idx; } if (/^\*\s*/.test(s)) { s = s.replace(/^\*\s*/, ''); ans = idx; } return s; });
       for (let k = i; k < j; k++) L[k].used = true; blocks.push({ num: +m[1], stem, texts, ans, line: L[i], src: L.slice(i, j).map(x => x.t).join(' / ') });
@@ -1856,7 +1884,7 @@ const Gen = {
     $('#main').innerHTML = `${App.banner()}<div class="view-head"><div class="grow"><button class="btn sec sm" data-act="nav" data-v="docs">← Kho tài liệu</button><h1 style="margin-top:8px">📄 ${esc(d.name)}</h1><p>Bước 1: kiểm tra và sửa văn bản trích xuất. Bước 2: tạo câu hỏi. Bước 3: duyệt từng câu rồi lưu.</p></div></div>
       ${(d.warnings || []).map(w => `<div class="msg warn" style="margin-bottom:8px">${esc(w)}</div>`).join('')}
       <div class="card" style="display:flex;flex-direction:column;gap:12px"><div class="row"><label class="field">Môn học<select id="g-sub"><option value="">Tự phát hiện</option>${so}</select></label><label class="field">Lớp<select id="g-gr">${Object.entries(GRADES).map(([k, v]) => `<option value="${k}" ${+k === d.grade ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label class="field">Chủ đề<input id="g-top" value="${esc(d.topic)}"></label></div>
-      ${d.pages.map((p, i) => `<details ${i < 2 ? 'open' : ''} class="pg"><summary><label><input type="checkbox" data-act="gpinc" data-i="${i}" ${p.inc ? 'checked' : ''}> <b>${esc(p.label)}</b></label> ${p.ocr ? '<span class="chip warn">OCR – cần kiểm tra</span>' : ''} <span class="muted">${p.text.split('\n').filter(Boolean).length} dòng</span></summary>${p.img ? `<img class="thumb" src="${p.img}" alt="Ảnh gốc ${esc(p.label)}">` : ''}<textarea data-gp="${i}" rows="8" style="width:100%;margin-top:8px;border:2px solid var(--line);border-radius:12px;padding:10px;font:inherit">${esc(p.text)}</textarea></details>`).join('')}
+      ${d.pages.map((p, i) => `<details ${i < 2 ? 'open' : ''} class="pg"><summary><label><input type="checkbox" data-act="gpinc" data-i="${i}" ${p.inc ? 'checked' : ''}> <b>${esc(p.label)}</b></label> ${p.ocr ? '<span class="chip warn">OCR – cần kiểm tra</span>' : ''}${p.img ? `<button class="btn sec sm" data-act="gocr" data-i="${i}">🔄 OCR lại trang này</button>` : ''} <span class="muted">${p.text.split('\n').filter(Boolean).length} dòng</span></summary>${p.img ? `<img class="thumb" src="${p.img}" alt="Ảnh gốc ${esc(p.label)}">` : ''}<textarea data-gp="${i}" rows="8" style="width:100%;margin-top:8px;border:2px solid var(--line);border-radius:12px;padding:10px;font:inherit">${esc(p.text)}</textarea></details>`).join('')}
       <div class="row"><button class="btn go" data-act="grun">🔍 Phát hiện và tạo câu hỏi</button><span class="muted">Dùng quy tắc JavaScript có sẵn, không gọi AI. Nội dung nào không nhận dạng được sẽ được liệt kê riêng.</span></div></div><div id="gen-res"></div>`;
     ['g-sub', 'g-gr', 'g-top'].forEach(i => { $('#' + i).onchange = () => { d.subject = $('#g-sub').value; d.grade = +$('#g-gr').value; d.topic = nfc($('#g-top').value.trim()); Save.run(() => db.put('docs', d)); }; });
     if (this.s.res) this.showRes();
@@ -1878,6 +1906,13 @@ const Gen = {
   find(k) { return this.s.res.drafts.find(x => x.k === k); }
 };
 Object.assign(Act, {
+  gocr: async el => {
+    const d = Gen.doc(), p = d.pages[+el.dataset.i]; if (!p || !p.img) return; el.disabled = true; const old = el.textContent; el.textContent = 'Đang nhận chữ…';
+    try { const im = new Image(); im.src = p.img; await im.decode(); const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0);
+      const t = await Extract.ocr(c, m => { el.textContent = m; }); await Extract.endOcr(); if (!t.trim()) { toast('OCR không nhận được chữ nào trên trang này', 'err'); el.disabled = false; el.textContent = old; return; }
+      p.text = t; p.ocr = true; p.inc = true; await Save.run(() => db.put('docs', d)); Gen.view(); toast('Đã nhận chữ lại. Hãy đọc và sửa lỗi rồi bấm Phát hiện.', 'ok'); }
+    catch (e) { await Extract.endOcr(); toast(e.message || 'OCR lỗi', 'err'); el.disabled = false; el.textContent = old; }
+  },
   gpinc: el => { const p = Gen.doc().pages[+el.dataset.i]; p.inc = el.checked; Save.run(() => db.put('docs', Gen.doc())); },
   grun: () => Gen.run(), gsel: el => { Gen.find(el.dataset.k).sel = el.checked; Gen.showRes(); },
   gall: el => { Gen.s.res.drafts.forEach(x => { x.sel = el.dataset.v === '1' && !validateQuestion(x.q); }); Gen.showRes(); },
