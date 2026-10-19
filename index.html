@@ -1582,8 +1582,8 @@ const SettingsView = {
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Mật khẩu chế độ giáo viên</h2><p class="muted">${LS.get('pin', null) ? 'Đang bật: khi chuyển từ chế độ học sinh sang giáo viên sẽ hỏi mật khẩu.' : 'Chưa đặt. Đặt mật khẩu để học sinh không tự mở phần quản lý.'} Lưu ý: đây là khóa đơn giản trong trình duyệt, đủ để ngăn thao tác vô tình của trẻ, không phải bảo mật cao.</p><div class="row"><label class="field">Mật khẩu mới (4–8 ký tự)<input id="pin-a" type="password" autocomplete="off"></label><label class="field">Nhập lại<input id="pin-b" type="password" autocomplete="off"></label></div><div class="row"><button class="btn sm" data-act="pinset">Lưu mật khẩu</button>${LS.get('pin', null) ? '<button class="btn sec sm" data-act="pinoff">Tắt mật khẩu</button>' : ''}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Phần thưởng</h2><p class="muted">Học sinh mở khóa phần thưởng khi đủ điểm kinh nghiệm (mỗi câu đúng ngay lần đầu +10). Điểm không bao giờ bị trừ.</p>${Rewards.list().map(r => `<div class="row" style="justify-content:space-between"><span>${esc(r.icon)} <b>${esc(r.name)}</b> · ${r.xp} điểm</span><button class="btn warn sm" data-act="rwdel" data-id="${r.id}">Xóa</button></div>`).join('') || '<span class="muted">Chưa có phần thưởng.</span>'}<div class="row"><label class="field" style="max-width:70px">Biểu tượng<input id="rw-i" value="🎁" maxlength="4"></label><label class="field">Tên phần thưởng<input id="rw-n"></label><label class="field" style="max-width:110px">Điểm cần<input id="rw-x" type="number" min="10" value="100"></label></div><div><button class="btn sm" data-act="rwadd">＋ Thêm phần thưởng</button></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:12px"><h2>Dữ liệu</h2><div id="storinfo" class="msg info">Đang kiểm tra dung lượng…</div>
-        <p class="muted">Dữ liệu nằm trong trình duyệt của máy này (IndexedDB). Không đồng bộ giữa các thiết bị: hãy sao lưu định kỳ.</p>
-        <div class="row"><button class="btn" data-act="backup">⬇ Sao lưu toàn bộ (JSON)</button><button class="btn sec" data-act="restore">⬆ Khôi phục từ file</button></div><button class="btn warn" data-act="resetall">Xóa toàn bộ dữ liệu và nạp lại dữ liệu mẫu</button></div>
+        <p class="muted">Dữ liệu học sinh và kết quả nằm trong trình duyệt của máy này (IndexedDB), hãy sao lưu định kỳ. Câu hỏi, bài học và tài liệu có thể dùng chung giữa các máy qua file <b>data.json</b> trên GitHub.</p>
+        <div class="row"><button class="btn" data-act="backup">⬇ Sao lưu toàn bộ (JSON)</button><button class="btn sec" data-act="restore">⬆ Khôi phục từ file</button></div><div class="row"><button class="btn go" data-act="exportpub">⬇ Xuất data.json để đăng GitHub</button><button class="btn sec" data-act="syncremote">🔄 Đồng bộ ngay từ data.json</button></div><p class="muted" id="syncstat" style="font-size:.85rem">${esc(Remote.status || 'Mỗi lần mở trang, ứng dụng tự nạp data.json cùng thư mục trên GitHub Pages.')}</p><button class="btn warn" data-act="resetall">Xóa toàn bộ dữ liệu và nạp lại dữ liệu mẫu</button></div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Quyền riêng tư và kết nối</h2><p>📷 Camera chỉ bật khi bấm nút và tắt khi thoát trò chơi. Hình ảnh không được ghi, lưu hay gửi đi; việc nhận diện chạy ngay trong trình duyệt.</p>
         <p>🌐 <b>Cần internet:</b> mô hình nhận diện bàn tay MediaPipe (tải qua jsDelivr và Google Storage, mỗi lần mở trang) và phông chữ Google. Chơi bằng chuột không cần mô hình.</p><p>🔊 Giọng đọc dùng giọng có sẵn của thiết bị; một số máy không có giọng tiếng Việt.</p></div></div>`;
     if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { const el = $('#storinfo'); if (!el) return; const mb = x => (x / 1048576).toFixed(1); const r = e.usage / e.quota; el.className = 'msg ' + (r > .8 ? 'warn' : 'info'); el.textContent = `Đã dùng ${mb(e.usage)} MB / ${mb(e.quota)} MB cho trang này.` + (r > .8 ? ' Dung lượng sắp đầy – hãy sao lưu và xóa bớt dữ liệu.' : ''); }).catch(() => { });
@@ -1604,6 +1604,8 @@ Object.assign(Act, {
   camrefresh: async () => { await cam.refreshDevices(); SettingsView.view(); toast(cam.devices.length ? `Tìm thấy ${cam.devices.length} camera` : 'Không thấy camera (hãy cấp quyền bằng nút Kiểm tra camera)'); },
   backup: () => { download(`kids-learning-studio-sao-luu-${dayKey(Date.now())}.json`, JSON.stringify({ app: 'kids_learning_ai_game_studio', version: 1, exportedAt: new Date().toISOString(), questions: State.questions.map(({ _dup, ...q }) => q), students: State.students, results: State.results, sessions: State.sessions, docs: State.docs, lessons: State.lessons, settings: Settings.v }), 'application/json'); toast('Đã xuất file sao lưu', 'ok'); },
   restore: () => $('#rst').click(),
+  exportpub: () => { download('data.json', JSON.stringify({ app: 'kids_learning_ai_game_studio', kind: 'public', version: 1, exportedAt: new Date().toISOString(), questions: State.questions.map(({ _dup, ...q }) => q), lessons: State.lessons, docs: State.docs }), 'application/json'); toast('Đã xuất data.json (không chứa học sinh, kết quả). Hãy upload đè lên GitHub.', 'ok'); },
+  syncremote: async () => { const el = $('#syncstat'); if (el) el.textContent = 'Đang tải data.json…'; try { const r = await Remote.sync(true); toast(`Đồng bộ xong: thêm ${r.added}, cập nhật ${r.updated} mục.`, 'ok'); SettingsView.view(); } catch (e) { Remote.status = 'Chưa đồng bộ data.json: ' + e.message; if (el) el.textContent = Remote.status; toast('Không đồng bộ được: ' + e.message, 'err'); } },
   resetall: async () => { if (!await ask('Xóa <b>toàn bộ</b> câu hỏi, học sinh và kết quả rồi nạp lại dữ liệu mẫu? Hãy sao lưu trước nếu cần.', 'Xóa và nạp lại', true)) return; await Data.reset(); App.renderTop(); App.go('dashboard'); toast('Đã nạp lại dữ liệu mẫu', 'ok'); }
 });
 const Data = {
@@ -1628,6 +1630,66 @@ const Data = {
   }
 };
 
+/* ===================== ĐỒNG BỘ data.json TỪ GITHUB PAGES =====================
+   Mỗi lần mở trang (qua http/https) ứng dụng tải data.json cùng thư mục rồi GỘP vào máy này:
+   - Câu hỏi / bài học / tài liệu chưa có trên máy  -> thêm vào.
+   - Câu hỏi / bài học đã có -> chỉ cập nhật khi bản trong data.json mới hơn bản trên máy.
+   - Mục bạn đã xóa hẳn trên máy này sẽ không tự quay lại (trừ khi bấm "Đồng bộ ngay").
+   - KHÔNG đụng tới học sinh, kết quả học tập, lượt chơi, cài đặt của từng máy. */
+const Remote = {
+  FILE: 'data.json', status: '',
+  async fetchData() {
+    if (!/^https?:$/.test(location.protocol)) throw new Error('Đang mở trực tiếp từ ổ đĩa (file://) nên không tải được data.json. Hãy mở bằng link https của GitHub Pages.');
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 25000);
+    try {
+      const res = await fetch(new URL(this.FILE, location.href).href, { cache: 'no-cache', signal: ctl.signal });
+      if (res.status === 404) throw new Error('Chưa có file data.json cùng thư mục với file HTML trên GitHub.');
+      if (!res.ok) throw new Error('Tải data.json bị lỗi HTTP ' + res.status);
+      let j; try { j = await res.json(); } catch (e) { throw new Error('data.json không phải JSON hợp lệ.'); }
+      if (!j || j.app !== 'kids_learning_ai_game_studio' || !Array.isArray(j.questions)) throw new Error('data.json không đúng định dạng của ứng dụng (hãy dùng nút “Xuất data.json để đăng GitHub”).');
+      return j;
+    } catch (e) { throw e.name === 'AbortError' ? new Error('Tải data.json quá lâu (hết thời gian chờ).') : e; }
+    finally { clearTimeout(tm); }
+  },
+  lastMod(x) { const h = Array.isArray(x.history) && x.history.length ? (x.history[x.history.length - 1].ts || 0) : 0; return Math.max(x.updated || 0, h, x.created || 0, x.added || 0); },
+  strip(x) { const { _dup, ...r } = x; return JSON.stringify(r); },
+  async sync(force = false) {
+    const j = await this.fetchData();
+    const rec = db.ok ? (await db.getAll('meta')).find(m => m.key === 'remoteSeen') : null;
+    const seen = new Set(rec ? rec.ids : []);
+    const plan = [
+      ['questions', arr => arr.map(normQ).filter(q => !validateQuestion(q)), true],
+      ['lessons', arr => arr.filter(l => l && l.id && l.name && Array.isArray(l.qids) && Array.isArray(l.games)), true],
+      ['docs', arr => arr.filter(d => d && d.id && Array.isArray(d.pages)), false],
+    ];
+    const sum = { added: 0, updated: 0 };
+    for (const [k, clean, canUpdate] of plan) {
+      if (j[k] == null) continue;
+      if (!Array.isArray(j[k])) throw new Error(`Mục “${k}” trong data.json không đúng định dạng.`);
+      const incoming = clean(j[k]); const idx = new Map(State[k].map((x, i) => [x.id, i])); const toSave = [];
+      for (const it of incoming) {
+        const key = k + ':' + it.id, i = idx.get(it.id);
+        if (i === undefined) { if (force || !seen.has(key)) { State[k].push(it); idx.set(it.id, State[k].length - 1); toSave.push(it); sum.added++; } }
+        else if (canUpdate) { const cur = State[k][i]; if ((this.lastMod(it) > this.lastMod(cur) || force) && this.strip(it) !== this.strip(cur)) { State[k][i] = it; toSave.push(it); sum.updated++; } }
+        seen.add(key);
+      }
+      if (toSave.length && db.ok) await Save.run(() => db.putMany(k, toSave));
+    }
+    if (db.ok) await db.put('meta', { key: 'remoteSeen', ids: [...seen] });
+    const when = j.exportedAt ? new Date(j.exportedAt).toLocaleString('vi-VN') : '?';
+    this.status = `Đã kiểm tra data.json (bản xuất ${when}): thêm ${sum.added}, cập nhật ${sum.updated}.`;
+    return sum;
+  },
+  /** Gọi khi mở trang: không chặn giao diện, lỗi mạng/404 bị bỏ qua êm */
+  auto() {
+    this.sync().then(r => {
+      if (!(r.added || r.updated)) return;
+      toast(`Đã cập nhật từ data.json: thêm ${r.added}, cập nhật ${r.updated} mục.`, 'ok');
+      if (!Session.current) App.go(State.view, State.viewArg);
+    }).catch(e => { this.status = 'Chưa đồng bộ data.json: ' + e.message; console.info(this.status); });
+  },
+};
+
 /* ===================== KHỞI ĐỘNG ===================== */
 App.init = async function () {
   Settings.load();
@@ -1646,7 +1708,7 @@ App.init = async function () {
   $('#imp').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) Bank.importFile(f); };
   $('#rst').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) Data.restore(f); };
   if (LS.get('pin', null) && State.mode === 'teacher' && !sessionStorage.getItem('kls_unlocked')) { State.mode = 'student'; LS.set('mode', 'student'); }
-  this.renderTop(); this.go('dashboard');
+  this.renderTop(); this.go('dashboard'); Remote.auto();
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { if (e.quota && e.usage / e.quota > .8) toast('Dung lượng lưu trữ sắp đầy. Hãy sao lưu và xóa bớt dữ liệu.', 'err'); }).catch(() => { });
 };
 document.addEventListener('DOMContentLoaded', () => App.init());
