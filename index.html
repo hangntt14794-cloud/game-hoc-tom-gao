@@ -273,7 +273,7 @@ code{background:#EEF1FF;padding:1px 6px;border-radius:6px;font-size:.88em}
 .shp{width:100%;max-width:110px;height:auto;display:block;margin:0 auto}
 .target.opt.big .shp{max-width:96px}
 .artsvg .shp{max-width:150px}.artemoji{font-size:clamp(2.6rem,7vw,4.2rem);letter-spacing:6px;margin-bottom:6px}
-.artgrid{display:inline-grid;gap:6px;margin-bottom:10px}.artgrid span{width:clamp(44px,9vw,64px);height:clamp(44px,9vw,64px);display:grid;place-items:center;font-size:clamp(1.5rem,4vw,2.3rem);font-family:var(--head);background:var(--cs);border:3px solid var(--c);border-radius:14px}
+.artgrid{display:grid;justify-content:center;gap:6px;margin:0 auto 10px}.artgrid span{width:clamp(44px,9vw,64px);height:clamp(44px,9vw,64px);display:grid;place-items:center;font-size:clamp(1.5rem,4vw,2.3rem);font-family:var(--head);background:var(--cs);border:3px solid var(--c);border-radius:14px}
 .artgrid .qm{background:#fff;border-style:dashed;color:var(--c);font-weight:800}
 .sil{filter:brightness(0);display:inline-block}.swatch{display:inline-block;width:78px;height:78px;border-radius:50%;border:4px solid var(--ink)}
 .ballrow{display:flex;justify-content:center;height:56px;margin-bottom:10px}#bball{font-size:2.6rem;transition:transform .4s ease-in;display:inline-block}
@@ -318,6 +318,21 @@ dialog:has(.crop){max-width:min(980px,96vw)}
 .dcard{position:absolute;top:8px;width:84%;min-height:70px;padding:8px;font-size:1.5rem;will-change:transform}
 .runner{position:absolute;bottom:6px;font-size:3rem;transform:translateX(-50%);transition:left .12s}
 canvas.fog{position:absolute;z-index:4;pointer-events:none;border-radius:0}.fogskip{position:absolute;right:14px;top:96px;z-index:7}
+
+.qtext{white-space:pre-line}.artgrid .gap{visibility:hidden;border-color:transparent;background:transparent}
+.artsvg .shp{max-width:190px}
+#printarea{display:none}
+@media print{
+  html,body{background:#fff!important;height:auto}
+  #app,#toasts,dialog,#vcursor,#trail{display:none!important}
+  #printarea{display:block!important;color:#000;font-family:'Nunito','Segoe UI',sans-serif;font-size:13pt}
+  .ws-page{page-break-after:always}.ws-page:last-child{page-break-after:auto}
+  @page{margin:14mm}
+}
+#printarea h1{font-size:20pt;margin:0 0 4px;text-align:center}.ws-meta{display:flex;justify-content:space-between;gap:16px;margin:6px 0 14px;font-size:12pt}
+.ws-cols{column-gap:28px}.ws-cols.c2{columns:2}.ws-q{break-inside:avoid;margin:0 0 14px}.ws-q b{font-weight:800}.ws-opts{display:flex;flex-wrap:wrap;gap:4px 22px;margin:3px 0 0 18px}.ws-q .shp{max-width:90px;display:inline-block;vertical-align:middle}
+.ws-blank{display:inline-block;min-width:70px;border-bottom:1.5px solid #000;margin-left:6px}.ws-grid{display:inline-grid;gap:4px;margin:4px 0}.ws-grid span{border:1.5px solid #000;min-width:30px;height:30px;display:grid;place-items:center;font-size:12pt}
+.ws-ans{font-size:12pt;columns:2;column-gap:24px}.ws-ans div{break-inside:avoid;margin:2px 0}.ws-q img{max-height:130px;display:block;margin:4px 0}
 </style>
 </head>
 <body>
@@ -325,6 +340,7 @@ canvas.fog{position:absolute;z-index:4;pointer-events:none;border-radius:0}.fogs
 <div id="toasts" aria-live="polite"></div><dialog id="modal"></dialog><dialog id="ask"></dialog>
 <div id="vcursor"></div><canvas id="trail"></canvas>
 <input type="file" id="imp" accept=".csv,.json,text/csv,application/json" hidden><input type="file" id="rst" accept=".json,application/json" hidden>
+<div id="printarea"></div>
 <noscript>Ứng dụng cần bật JavaScript.</noscript>
 <script>
 'use strict';
@@ -883,14 +899,14 @@ class Session {
   teamHud() { const h = $('#h-team'); if (!h || !this.nTeams) return; h.innerHTML = `Lượt: <b>${TEAMS[this.turn].icon} ${TEAMS[this.turn].name}</b> · ` + TEAMS.slice(0, this.nTeams).map((t, i) => `${t.icon} ${this.tscore[i]}`).join(' · '); }
   skip() { if (this.locked || this.finished) return; this.skipped++; this.next(); }
   log(correct) {
-    this.logged = true; const q = this.item; if (!State.student || this.nTeams || q.type === 'maze' || q.gen) return;
-    const r = { id: uid(), studentId: State.student, qid: q.id, subject: q.subject, topic: q.topic, correct, ts: Date.now(), ms: Math.round(performance.now() - this.qStart), game: this.game.id };
+    this.logged = true; const q = this.item; if (!State.student || this.nTeams || q.type === 'maze' || (q.gen && !q.log)) return;
+    const r = { id: uid(), studentId: State.student, qid: q.gen ? 'gen:' + this.game.id : q.id, subject: q.subject, topic: q.topic, correct, ts: Date.now(), ms: Math.round(performance.now() - this.qStart), game: this.game.id };
     State.results.push(r); Save.run(() => db.put('results', r));
   }
   right() {
     if (this.locked || this.finished) return; this.locked = true; this.play.classList.add('locked'); this.dwell.clear();
     const first = this.mistakes === 0; if (!this.logged) this.log(true);
-    if (first) { this.score++; if (this.nTeams) { this.tscore[this.turn]++; this.teamHud(); } this.streak++; this.best = Math.max(this.best, this.streak); this.xp += 10; } else { this.xp += 4; this.streak = 0; if (this.item.type !== 'maze' && !this.item.gen) this.wrongs.push({ q: this.item, shown: false }); }
+    if (first) { this.score++; if (this.nTeams) { this.tscore[this.turn]++; this.teamHud(); } this.streak++; this.best = Math.max(this.best, this.streak); this.xp += 10; } else { this.xp += 4; this.streak = 0; if (this.item.type !== 'maze' && (!this.item.gen || this.item.log)) this.wrongs.push({ q: this.item, shown: false }); }
     $('#h-s').textContent = '⭐ ' + this.score; $('#h-k').textContent = '🔥 ' + this.streak; Sfx.ok();
     this.fb('ok', PRAISE[Math.floor(Math.random() * PRAISE.length)], this.item.explain); this.later(() => this.next(), this.item.explain ? 2200 : 1300);
   }
@@ -1380,7 +1396,7 @@ const Bank = {
   view() {
     const s = this.s; s.sel.clear(); const opt = (obj, v) => Object.entries(obj).map(([k, x]) => `<option value="${k}" ${String(v) === k ? 'selected' : ''}>${typeof x === 'string' ? x : x.name}</option>`).join('');
     $('#main').innerHTML = `${App.banner()}<div class="view-head"><div class="grow"><h1>🗃️ Ngân hàng câu hỏi</h1><p>Chỉ những câu có trạng thái “Đã duyệt” mới xuất hiện trong trò chơi. Câu nhập từ file mặc định là “Cần giáo viên kiểm tra”.</p></div>
-      <div class="row"><button class="btn go" data-act="badd">＋ Thêm câu hỏi</button><button class="btn sec" data-act="bimport">⬆ Nhập CSV/JSON</button><button class="btn sec" data-act="bexp" data-f="csv">⬇ CSV</button><button class="btn sec" data-act="bexp" data-f="json">⬇ JSON</button><button class="btn sec" data-act="btpl">Tải file CSV mẫu</button></div></div>
+      <div class="row"><button class="btn go" data-act="badd">＋ Thêm câu hỏi</button><button class="btn sec" data-act="bimport">⬆ Nhập CSV/JSON</button><button class="btn sec" data-act="bexp" data-f="csv">⬇ CSV</button><button class="btn sec" data-act="bexp" data-f="json">⬇ JSON</button><button class="btn sec" data-act="btpl">Tải file CSV mẫu</button><button class="btn sec" data-act="bprint">🖨 In phiếu bài tập</button></div></div>
       <div class="filters"><label class="field" style="flex:1;min-width:200px">Tìm kiếm (không cần gõ dấu)<input data-bind="bank.q" data-refresh="bank" value="${esc(s.q)}" placeholder="nội dung, từ khóa, chủ đề, thẻ"></label>
       <label class="field">Môn<select data-bind="bank.subject" data-refresh="bank"><option value="">Tất cả</option>${opt(SUBJECTS, s.subject)}</select></label>
       <label class="field">Lớp<select data-bind="bank.grade" data-refresh="bank"><option value="">Tất cả</option>${opt(GRADES, s.grade)}</select></label>
@@ -1582,8 +1598,8 @@ const SettingsView = {
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Mật khẩu chế độ giáo viên</h2><p class="muted">${LS.get('pin', null) ? 'Đang bật: khi chuyển từ chế độ học sinh sang giáo viên sẽ hỏi mật khẩu.' : 'Chưa đặt. Đặt mật khẩu để học sinh không tự mở phần quản lý.'} Lưu ý: đây là khóa đơn giản trong trình duyệt, đủ để ngăn thao tác vô tình của trẻ, không phải bảo mật cao.</p><div class="row"><label class="field">Mật khẩu mới (4–8 ký tự)<input id="pin-a" type="password" autocomplete="off"></label><label class="field">Nhập lại<input id="pin-b" type="password" autocomplete="off"></label></div><div class="row"><button class="btn sm" data-act="pinset">Lưu mật khẩu</button>${LS.get('pin', null) ? '<button class="btn sec sm" data-act="pinoff">Tắt mật khẩu</button>' : ''}</div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Phần thưởng</h2><p class="muted">Học sinh mở khóa phần thưởng khi đủ điểm kinh nghiệm (mỗi câu đúng ngay lần đầu +10). Điểm không bao giờ bị trừ.</p>${Rewards.list().map(r => `<div class="row" style="justify-content:space-between"><span>${esc(r.icon)} <b>${esc(r.name)}</b> · ${r.xp} điểm</span><button class="btn warn sm" data-act="rwdel" data-id="${r.id}">Xóa</button></div>`).join('') || '<span class="muted">Chưa có phần thưởng.</span>'}<div class="row"><label class="field" style="max-width:70px">Biểu tượng<input id="rw-i" value="🎁" maxlength="4"></label><label class="field">Tên phần thưởng<input id="rw-n"></label><label class="field" style="max-width:110px">Điểm cần<input id="rw-x" type="number" min="10" value="100"></label></div><div><button class="btn sm" data-act="rwadd">＋ Thêm phần thưởng</button></div></div>
       <div class="card" style="display:flex;flex-direction:column;gap:12px"><h2>Dữ liệu</h2><div id="storinfo" class="msg info">Đang kiểm tra dung lượng…</div>
-        <p class="muted">Dữ liệu học sinh và kết quả nằm trong trình duyệt của máy này (IndexedDB), hãy sao lưu định kỳ. Câu hỏi, bài học và tài liệu có thể dùng chung giữa các máy qua file <b>data.json</b> trên GitHub.</p>
-        <div class="row"><button class="btn" data-act="backup">⬇ Sao lưu toàn bộ (JSON)</button><button class="btn sec" data-act="restore">⬆ Khôi phục từ file</button></div><div class="row"><button class="btn go" data-act="exportpub">⬇ Xuất data.json để đăng GitHub</button><button class="btn sec" data-act="syncremote">🔄 Đồng bộ ngay từ data.json</button></div><p class="muted" id="syncstat" style="font-size:.85rem">${esc(Remote.status || 'Mỗi lần mở trang, ứng dụng tự nạp data.json cùng thư mục trên GitHub Pages.')}</p><button class="btn warn" data-act="resetall">Xóa toàn bộ dữ liệu và nạp lại dữ liệu mẫu</button></div>
+        <p class="muted">Dữ liệu nằm trong trình duyệt của máy này (IndexedDB). Không đồng bộ giữa các thiết bị: hãy sao lưu định kỳ.</p>
+        <div class="row"><button class="btn" data-act="backup">⬇ Sao lưu toàn bộ (JSON)</button><button class="btn sec" data-act="restore">⬆ Khôi phục từ file</button></div><button class="btn warn" data-act="resetall">Xóa toàn bộ dữ liệu và nạp lại dữ liệu mẫu</button></div>
       <div class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Quyền riêng tư và kết nối</h2><p>📷 Camera chỉ bật khi bấm nút và tắt khi thoát trò chơi. Hình ảnh không được ghi, lưu hay gửi đi; việc nhận diện chạy ngay trong trình duyệt.</p>
         <p>🌐 <b>Cần internet:</b> mô hình nhận diện bàn tay MediaPipe (tải qua jsDelivr và Google Storage, mỗi lần mở trang) và phông chữ Google. Chơi bằng chuột không cần mô hình.</p><p>🔊 Giọng đọc dùng giọng có sẵn của thiết bị; một số máy không có giọng tiếng Việt.</p></div></div>`;
     if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { const el = $('#storinfo'); if (!el) return; const mb = x => (x / 1048576).toFixed(1); const r = e.usage / e.quota; el.className = 'msg ' + (r > .8 ? 'warn' : 'info'); el.textContent = `Đã dùng ${mb(e.usage)} MB / ${mb(e.quota)} MB cho trang này.` + (r > .8 ? ' Dung lượng sắp đầy – hãy sao lưu và xóa bớt dữ liệu.' : ''); }).catch(() => { });
@@ -1604,8 +1620,6 @@ Object.assign(Act, {
   camrefresh: async () => { await cam.refreshDevices(); SettingsView.view(); toast(cam.devices.length ? `Tìm thấy ${cam.devices.length} camera` : 'Không thấy camera (hãy cấp quyền bằng nút Kiểm tra camera)'); },
   backup: () => { download(`kids-learning-studio-sao-luu-${dayKey(Date.now())}.json`, JSON.stringify({ app: 'kids_learning_ai_game_studio', version: 1, exportedAt: new Date().toISOString(), questions: State.questions.map(({ _dup, ...q }) => q), students: State.students, results: State.results, sessions: State.sessions, docs: State.docs, lessons: State.lessons, settings: Settings.v }), 'application/json'); toast('Đã xuất file sao lưu', 'ok'); },
   restore: () => $('#rst').click(),
-  exportpub: () => { download('data.json', JSON.stringify({ app: 'kids_learning_ai_game_studio', kind: 'public', version: 1, exportedAt: new Date().toISOString(), questions: State.questions.map(({ _dup, ...q }) => q), lessons: State.lessons, docs: State.docs }), 'application/json'); toast('Đã xuất data.json (không chứa học sinh, kết quả). Hãy upload đè lên GitHub.', 'ok'); },
-  syncremote: async () => { const el = $('#syncstat'); if (el) el.textContent = 'Đang tải data.json…'; try { const r = await Remote.sync(true); toast(`Đồng bộ xong: thêm ${r.added}, cập nhật ${r.updated} mục.`, 'ok'); SettingsView.view(); } catch (e) { Remote.status = 'Chưa đồng bộ data.json: ' + e.message; if (el) el.textContent = Remote.status; toast('Không đồng bộ được: ' + e.message, 'err'); } },
   resetall: async () => { if (!await ask('Xóa <b>toàn bộ</b> câu hỏi, học sinh và kết quả rồi nạp lại dữ liệu mẫu? Hãy sao lưu trước nếu cần.', 'Xóa và nạp lại', true)) return; await Data.reset(); App.renderTop(); App.go('dashboard'); toast('Đã nạp lại dữ liệu mẫu', 'ok'); }
 });
 const Data = {
@@ -1630,66 +1644,6 @@ const Data = {
   }
 };
 
-/* ===================== ĐỒNG BỘ data.json TỪ GITHUB PAGES =====================
-   Mỗi lần mở trang (qua http/https) ứng dụng tải data.json cùng thư mục rồi GỘP vào máy này:
-   - Câu hỏi / bài học / tài liệu chưa có trên máy  -> thêm vào.
-   - Câu hỏi / bài học đã có -> chỉ cập nhật khi bản trong data.json mới hơn bản trên máy.
-   - Mục bạn đã xóa hẳn trên máy này sẽ không tự quay lại (trừ khi bấm "Đồng bộ ngay").
-   - KHÔNG đụng tới học sinh, kết quả học tập, lượt chơi, cài đặt của từng máy. */
-const Remote = {
-  FILE: 'data.json', status: '',
-  async fetchData() {
-    if (!/^https?:$/.test(location.protocol)) throw new Error('Đang mở trực tiếp từ ổ đĩa (file://) nên không tải được data.json. Hãy mở bằng link https của GitHub Pages.');
-    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 25000);
-    try {
-      const res = await fetch(new URL(this.FILE, location.href).href, { cache: 'no-cache', signal: ctl.signal });
-      if (res.status === 404) throw new Error('Chưa có file data.json cùng thư mục với file HTML trên GitHub.');
-      if (!res.ok) throw new Error('Tải data.json bị lỗi HTTP ' + res.status);
-      let j; try { j = await res.json(); } catch (e) { throw new Error('data.json không phải JSON hợp lệ.'); }
-      if (!j || j.app !== 'kids_learning_ai_game_studio' || !Array.isArray(j.questions)) throw new Error('data.json không đúng định dạng của ứng dụng (hãy dùng nút “Xuất data.json để đăng GitHub”).');
-      return j;
-    } catch (e) { throw e.name === 'AbortError' ? new Error('Tải data.json quá lâu (hết thời gian chờ).') : e; }
-    finally { clearTimeout(tm); }
-  },
-  lastMod(x) { const h = Array.isArray(x.history) && x.history.length ? (x.history[x.history.length - 1].ts || 0) : 0; return Math.max(x.updated || 0, h, x.created || 0, x.added || 0); },
-  strip(x) { const { _dup, ...r } = x; return JSON.stringify(r); },
-  async sync(force = false) {
-    const j = await this.fetchData();
-    const rec = db.ok ? (await db.getAll('meta')).find(m => m.key === 'remoteSeen') : null;
-    const seen = new Set(rec ? rec.ids : []);
-    const plan = [
-      ['questions', arr => arr.map(normQ).filter(q => !validateQuestion(q)), true],
-      ['lessons', arr => arr.filter(l => l && l.id && l.name && Array.isArray(l.qids) && Array.isArray(l.games)), true],
-      ['docs', arr => arr.filter(d => d && d.id && Array.isArray(d.pages)), false],
-    ];
-    const sum = { added: 0, updated: 0 };
-    for (const [k, clean, canUpdate] of plan) {
-      if (j[k] == null) continue;
-      if (!Array.isArray(j[k])) throw new Error(`Mục “${k}” trong data.json không đúng định dạng.`);
-      const incoming = clean(j[k]); const idx = new Map(State[k].map((x, i) => [x.id, i])); const toSave = [];
-      for (const it of incoming) {
-        const key = k + ':' + it.id, i = idx.get(it.id);
-        if (i === undefined) { if (force || !seen.has(key)) { State[k].push(it); idx.set(it.id, State[k].length - 1); toSave.push(it); sum.added++; } }
-        else if (canUpdate) { const cur = State[k][i]; if ((this.lastMod(it) > this.lastMod(cur) || force) && this.strip(it) !== this.strip(cur)) { State[k][i] = it; toSave.push(it); sum.updated++; } }
-        seen.add(key);
-      }
-      if (toSave.length && db.ok) await Save.run(() => db.putMany(k, toSave));
-    }
-    if (db.ok) await db.put('meta', { key: 'remoteSeen', ids: [...seen] });
-    const when = j.exportedAt ? new Date(j.exportedAt).toLocaleString('vi-VN') : '?';
-    this.status = `Đã kiểm tra data.json (bản xuất ${when}): thêm ${sum.added}, cập nhật ${sum.updated}.`;
-    return sum;
-  },
-  /** Gọi khi mở trang: không chặn giao diện, lỗi mạng/404 bị bỏ qua êm */
-  auto() {
-    this.sync().then(r => {
-      if (!(r.added || r.updated)) return;
-      toast(`Đã cập nhật từ data.json: thêm ${r.added}, cập nhật ${r.updated} mục.`, 'ok');
-      if (!Session.current) App.go(State.view, State.viewArg);
-    }).catch(e => { this.status = 'Chưa đồng bộ data.json: ' + e.message; console.info(this.status); });
-  },
-};
-
 /* ===================== KHỞI ĐỘNG ===================== */
 App.init = async function () {
   Settings.load();
@@ -1708,7 +1662,7 @@ App.init = async function () {
   $('#imp').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) Bank.importFile(f); };
   $('#rst').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) Data.restore(f); };
   if (LS.get('pin', null) && State.mode === 'teacher' && !sessionStorage.getItem('kls_unlocked')) { State.mode = 'student'; LS.set('mode', 'student'); }
-  this.renderTop(); this.go('dashboard'); Remote.auto();
+  this.renderTop(); this.go('dashboard');
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { if (e.quota && e.usage / e.quota > .8) toast('Dung lượng lưu trữ sắp đầy. Hãy sao lưu và xóa bớt dữ liệu.', 'err'); }).catch(() => { });
 };
 document.addEventListener('DOMContentLoaded', () => App.init());
@@ -2176,6 +2130,12 @@ const Shapes = {
     };
     return this.wrap(M[n] || '');
   },
+  clock(h, mi) {
+    const S = this.S; let r = `<circle cx="50" cy="50" r="46" fill="#fff" stroke="${S}" stroke-width="3"/>`; const p = (a, l) => [50 + l * Math.sin(a * Math.PI / 180), 50 - l * Math.cos(a * Math.PI / 180)].map(v => v.toFixed(2));
+    for (let i = 0; i < 12; i++) { const a = i * 30, [x1, y1] = p(a, 40), [x2, y2] = p(a, 44); r += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${S}" stroke-width="2"/>`; const [tx, ty] = p(a, 33); r += `<text x="${tx}" y="${(+ty + 3.2).toFixed(2)}" font-size="9" font-weight="700" text-anchor="middle" fill="${S}">${i || 12}</text>`; }
+    const ha = ((h % 12) + mi / 60) * 30, ma = mi * 6, [hx, hy] = p(ha, 21), [mx, my] = p(ma, 32);
+    r += `<line x1="50" y1="50" x2="${hx}" y2="${hy}" stroke="${S}" stroke-width="4.5" stroke-linecap="round"/><line x1="50" y1="50" x2="${mx}" y2="${my}" stroke="#E5484D" stroke-width="3" stroke-linecap="round"/><circle cx="50" cy="50" r="3" fill="${S}"/>`; return this.wrap(r);
+  },
   frac(a, b, kind) {
     const st = `stroke="${this.S}" stroke-width="2.5"`; let r = '';
     if (kind === 'bar') { const w = 90 / b; for (let i = 0; i < b; i++) r += `<rect x="${(5 + i * w).toFixed(2)}" y="30" width="${w.toFixed(2)}" height="40" fill="${i < a ? this.F : this.B}" ${st}/>`; return this.wrap(r); }
@@ -2187,13 +2147,14 @@ const Shapes = {
     t = String(t); let m;
     if ((m = t.match(/^svg:shape:(\w+)$/))) return this.shape(m[1]);
     if ((m = t.match(/^svg:frac:(\d+)\/(\d+):(circle|bar)$/))) return this.frac(+m[1], +m[2], m[3]);
+    if ((m = t.match(/^svg:clock:(\d{1,2}):(\d{1,2})$/))) return this.clock(+m[1], +m[2]);
     if ((m = t.match(/^sil:(.+)$/))) return `<span class="sil">${esc(m[1])}</span>`;
     if ((m = t.match(/^color:(#[0-9a-fA-F]{6})$/))) return `<span class="swatch" style="background:${m[1]}"></span>`;
     return esc(t);
   },
   art(t) {
     if (!t) return ''; if (t.startsWith('emoji:')) return `<div class="artemoji">${esc(t.slice(6))}</div>`;
-    if (t.startsWith('grid:')) { const i = t.indexOf('|'); const cols = +t.slice(5, i); return `<div class="artgrid" style="grid-template-columns:repeat(${cols},auto)">${t.slice(i + 1).split(',').map(x => x === '?' ? '<span class="qm">?</span>' : `<span>${esc(x)}</span>`).join('')}</div>`; }
+    if (t.startsWith('grid:')) { const i = t.indexOf('|'); const cols = +t.slice(5, i); return `<div class="artgrid" style="grid-template-columns:repeat(${cols},auto)">${t.slice(i + 1).split(',').map(x => x === '?' ? '<span class="qm">?</span>' : x === '·' ? '<span class="gap"></span>' : `<span>${esc(x)}</span>`).join('')}</div>`; }
     if (t.startsWith('svg:')) return `<div class="artsvg">${this.opt(t)}</div>`; return '';
   }
 };
@@ -2644,6 +2605,128 @@ function buildSeed4() {
   ].forEach(([sub, g, topic, t, a, ex]) => out.push(base({ subject: sub, grade: g, topic, text: 'Nhận định sau đúng hay sai? ' + t, answer: a, explain: ex || 'Nhận định này đúng.' })));
   return out;
 }
+/* =====================================================================
+   Lô trò Toán tự sinh (3 mức độ) và chức năng in phiếu bài tập
+   Mọi đáp án đều được máy tự tính, không cần ngân hàng câu hỏi.
+   ===================================================================== */
+const LVL = { key: 'lvl', label: 'Mức độ', vals: [[1, 'Dễ'], [2, 'Vừa'], [3, 'Khó']], def: 1 };
+const nearNums = (a, mn = 0, mx = 99999) => { const c = []; [1, -1, 2, -2, 10, -10, 3, -3, 5, -5].forEach(d => { const v = a + d; if (v >= mn && v <= mx && v !== a && !c.includes(v)) c.push(v); }); return c; };
+function mq(i, topic, text, correct, wrongs, extra = {}) {
+  correct = String(correct); const w = [...new Set(wrongs.map(String))].filter(x => x !== correct); const opts = shuffle([correct, ...w.slice(0, 3)]);
+  return gbase(i, 'math', topic, text, { type: 'mcq', options: opts, answer: opts.indexOf(correct), log: true, ...extra });
+}
+const lv = cfg => clamp(+cfg.lvl || 1, 1, 3);
+const fmtN = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const DICE = '⚀⚁⚂⚃⚄⚅';
+
+GENERATORS.dice = cfg => Array.from({ length: cfg.n }, (_, i) => { const k = lv(cfg) === 1 ? 2 : 3, d = Array.from({ length: k }, () => ri(1, 6)), s = d.reduce((a, b) => a + b, 0);
+  return mq(i, 'Cộng xúc xắc', 'Tổng số chấm trên các viên xúc xắc là bao nhiêu?', s, nearNums(s, 1), { art: 'emoji:' + d.map(x => DICE[x - 1]).join(' + '), explain: d.join(' + ') + ' = ' + s + '.' }); });
+GENERATORS.sortnum = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), mx = [20, 100, 1000][L - 1], k = L === 1 ? 4 : 5, nums = distinct(k, 1, mx), desc = L > 1 && Math.random() < .5, sorted = nums.slice().sort((a, b) => desc ? b - a : a - b).map(String);
+  return gbase(i, 'math', 'Sắp xếp số', desc ? 'Sắp xếp các số từ lớn đến bé' : 'Sắp xếp các số từ bé đến lớn', { type: 'order', items: sorted, log: true, explain: sorted.join(desc ? ' > ' : ' < ') }); });
+GENERATORS.cmpnum = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg); let l, r, lv_, rv;
+  const ex = mx => { const a = ri(1, mx), b = ri(1, mx); return Math.random() < .5 ? [`${a + b} − ${b}`, a] : [`${a} + ${b}`, a + b]; };
+  if (L === 1) { lv_ = ri(0, 20); rv = Math.random() < .2 ? lv_ : ri(0, 20); l = lv_; r = rv; } else if (L === 2) { const [e, v] = ex(15); lv_ = v; l = e; rv = Math.random() < .25 ? v : ri(Math.max(0, v - 4), v + 4); r = rv; } else { const [e1, v1] = ex(30), [e2, v2] = ex(30); l = e1; r = e2; lv_ = v1; rv = Math.random() < .25 ? v1 : v2; if (rv === v1 && r === l) r = `${v1 - 1} + 1`; if (rv === v1) { r = `${v1 - 1} + 1`; } else r = e2; }
+  const sign = lv_ > rv ? '>' : lv_ < rv ? '<' : '='; return mq(i, 'So sánh số', `Chọn dấu thích hợp:  ${l}  …  ${r}`, sign, ['>', '<', '='], { explain: `${lv_} ${sign} ${rv}.` }); });
+GENERATORS.bonds = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), t = L === 1 ? ri(3, 10) : L === 2 ? ri(11, 20) : ri(5, 19) * 5, a = L === 3 ? ri(1, t / 5 - 1) * 5 : ri(1, t - 1), b = t - a;
+  return mq(i, 'Tách gộp số', `${t} = ${a} + ?`, b, nearNums(b, 0, t), { explain: `${t} − ${a} = ${b}.` }); });
+GENERATORS.pairs10 = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), T = [10, 20, 100][L - 1], pool = L === 3 ? [10, 20, 30, 40, 50, 60, 70, 80, 90] : Array.from({ length: T - 1 }, (_, x) => x + 1), a = shuffle(pool).slice(0, 4);
+  return gbase(i, 'math', 'Cặp số có tổng ' + T, `Nối các cặp số có tổng bằng ${T}`, { type: 'pairs', pairs: a.map(x => [String(x), String(T - x)]), log: true, explain: a.map(x => `${x} + ${T - x} = ${T}`).join('; ') }); });
+GENERATORS.add3 = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), [lo, hi] = [[1, 5], [1, 9], [10, 30]][L - 1], n = [ri(lo, hi), ri(lo, hi), ri(lo, hi)], s = n[0] + n[1] + n[2];
+  return mq(i, 'Cộng ba số', `🎱 ${n[0]} + ${n[1]} + ${n[2]} = ?`, s, nearNums(s, 0), { explain: `${n[0]} + ${n[1]} = ${n[0] + n[1]}, rồi ${n[0] + n[1]} + ${n[2]} = ${s}.` }); });
+GENERATORS.detective = cfg => { const F = ['🍎', '🍌', '🍇', '🍓', '🍊', '🥕']; return Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), f = shuffle(F); let text, ans, ex;
+  if (L === 1) { const x = ri(2, 6), y = ri(1, 9); text = `${f[0]} + ${f[0]} = ${2 * x}\n${f[0]} + ${f[1]} = ${x + y}\n${f[1]} = ?`; ans = y; ex = `${f[0]} = ${x}, nên ${f[1]} = ${x + y} − ${x} = ${y}.`; }
+  else if (L === 2) { const x = ri(2, 6), y = ri(2, 8), z = ri(2, 8); text = `${f[0]} + ${f[0]} = ${2 * x}\n${f[0]} + ${f[1]} = ${x + y}\n${f[1]} + ${f[2]} = ${y + z}\n${f[2]} = ?`; ans = z; ex = `${f[0]} = ${x}; ${f[1]} = ${y}; ${f[2]} = ${y + z} − ${y} = ${z}.`; }
+  else { const x = ri(2, 6), y = ri(2, 7); text = `${f[0]} + ${f[0]} + ${f[0]} = ${3 * x}\n${f[0]} + ${f[1]} + ${f[1]} = ${x + 2 * y}\n${f[1]} + ${f[1]} + ${f[0]} = ?`; ans = 2 * y + x; ex = `${f[0]} = ${x}; ${f[1]} = ${y}; nên kết quả là ${2 * y + x}.`; }
+  return mq(i, 'Thám tử trái cây', text, ans, nearNums(ans, 1), { explain: ex }); }); };
+GENERATORS.evenodd = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg); let text, ans, ex;
+  if (L === 1) { const n = ri(1, 20); text = `Số ${n} là số chẵn hay số lẻ?`; ans = n % 2 ? 'Lẻ' : 'Chẵn'; ex = 'Số chẵn tận cùng là 0, 2, 4, 6, 8.'; }
+  else if (L === 2) { const n = ri(21, 999); text = `Số ${n} là số chẵn hay số lẻ?`; ans = n % 2 ? 'Lẻ' : 'Chẵn'; ex = `Chữ số tận cùng của ${n} là ${n % 10}.`; }
+  else { const a = ri(11, 99), b = ri(11, 99); text = `Tổng ${a} + ${b} là số chẵn hay số lẻ?`; ans = (a + b) % 2 ? 'Lẻ' : 'Chẵn'; ex = `${a} là số ${a % 2 ? 'lẻ' : 'chẵn'}, ${b} là số ${b % 2 ? 'lẻ' : 'chẵn'}; ${a} + ${b} = ${a + b}.`; }
+  return mq(i, 'Chẵn và lẻ', text, ans, ['Chẵn', 'Lẻ'], { explain: ex }); });
+GENERATORS.placeval = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg);
+  if (L === 1) { const n = ri(11, 99), u = n % 10, t = n - u; return mq(i, 'Tách số tròn chục', `${n} = ${t} + ?`, u, nearNums(u, 0, 9), { explain: `${n} gồm ${t} và ${u}.` }); }
+  if (L === 2) { const n = ri(101, 999), hundreds = Math.floor(n / 100), tens = Math.floor(n / 10) % 10, units = n % 10, k = ri(0, 2); const names = ['hàng trăm', 'hàng chục', 'hàng đơn vị'], vals = [hundreds, tens, units];
+    return mq(i, 'Hàng của số', `Chữ số ${names[k]} của số ${n} là?`, vals[k], nearNums(vals[k], 0, 9), { explain: `${n} = ${hundreds * 100} + ${tens * 10} + ${units}.` }); }
+  const n = ri(1001, 9999), th = Math.floor(n / 1000), h = Math.floor(n / 100) % 10, t = Math.floor(n / 10) % 10, u = n % 10; if (Math.random() < .5) return mq(i, 'Tách số theo hàng', `${fmtN(n)} = ${th * 1000} + ${h * 100} + ${t * 10} + ?`, u, nearNums(u, 0, 9), { explain: `${fmtN(n)} = ${th * 1000} + ${h * 100} + ${t * 10} + ${u}.` });
+  return mq(i, 'Hàng của số', `Chữ số hàng nghìn của số ${fmtN(n)} là?`, th, nearNums(th, 1, 9), { explain: `${fmtN(n)} có ${th} nghìn.` }); });
+GENERATORS.addplace = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg); let a, b;
+  if (L === 1) { const au = ri(0, 4), bu = ri(0, 5 - au + 4 > 9 ? 4 : 4); a = ri(1, 5) * 10 + au; b = ri(1, 4) * 10 + Math.min(bu, 9 - au); } else if (L === 2) { a = ri(11, 69); b = ri(11, 99 - a); if ((a % 10) + (b % 10) < 10) b = Math.min(99 - a, b + (10 - ((a % 10) + (b % 10))) + ri(0, 3)); } else { a = ri(101, 600); b = ri(101, 999 - a); }
+  const s = a + b, p = n => n >= 100 ? [Math.floor(n / 100) * 100, Math.floor(n / 10) % 10 * 10, n % 10] : [Math.floor(n / 10) * 10, n % 10]; const pa = p(a), pb = p(b);
+  const steps = pa.map((x, k) => `${x} + ${pb[k] ?? 0}`).join(' ; ');
+  return mq(i, 'Cộng theo hàng', `${a} + ${b} = ?\nGợi ý: tách ${a} = ${pa.join(' + ')} và ${b} = ${pb.join(' + ')}`, s, nearNums(s, 0), { explain: `${steps} rồi cộng lại được ${s}.` }); });
+GENERATORS.pyramid = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg); let cells, vals, cols;
+  if (L === 1) { const a = ri(1, 9), b = ri(1, 9); cols = 3; vals = [null, a + b, null, a, null, b]; cells = ['·', 'T', '·', 'A', '·', 'B']; }
+  else { const mx = L === 2 ? 9 : 20, a = ri(1, mx), b = ri(1, mx), c = ri(1, mx); cols = 5; vals = [null, null, 2 * b + a + c, null, null, null, a + b, null, b + c, null, a, null, b, null, c]; cells = ['·', '·', 'T', '·', '·', '·', 'M', '·', 'N', '·', 'A', '·', 'B', '·', 'C']; }
+  const real = vals.map((v, k) => v == null ? '·' : v), cand = real.map((v, k) => v === '·' ? -1 : k).filter(k => k >= 0), h = L === 1 ? cand[ri(0, 2)] : cand[ri(0, cand.length - 1)], ans = real[h];
+  if (L === 1) { real[0 + 0] = '·'; }
+  const out = real.slice(); out[h] = '?'; return mq(i, 'Tháp số', 'Mỗi ô bằng tổng hai ô nằm ngay dưới nó. Tìm số ở ô có dấu ?', ans, nearNums(ans, 0), { art: `grid:${cols}|` + out.join(','), explain: 'Ô trên = tổng hai ô liền dưới.' }); });
+GENERATORS.balance = cfg => { const A = ['🐶', '🐱', '🐟', '🐰', '🐷']; return Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), f = shuffle(A); let text, ans, ex;
+  if (L === 1) { const a = ri(2, 4), b = ri(2, 4); text = `1 ${f[0]} nặng bằng ${a} ${f[1]}.\n1 ${f[1]} nặng bằng ${b} ${f[2]}.\n1 ${f[0]} nặng bằng mấy ${f[2]}?`; ans = a * b; ex = `${a} × ${b} = ${a * b}.`; }
+  else if (L === 2) { const a = ri(2, 4), b = ri(2, 4); text = `1 ${f[0]} nặng bằng ${a} ${f[1]}.\n1 ${f[1]} nặng bằng ${b} ${f[2]}.\n2 ${f[0]} nặng bằng mấy ${f[2]}?`; ans = 2 * a * b; ex = `1 ${f[0]} = ${a * b} ${f[2]} nên 2 ${f[0]} = ${2 * a * b} ${f[2]}.`; }
+  else { const b = ri(2, 4), q = ri(2, 5); text = `1 ${f[0]} nặng bằng ${b * q} ${f[2]}.\n1 ${f[1]} nặng bằng ${b} ${f[2]}.\n1 ${f[0]} nặng bằng mấy ${f[1]}?`; ans = q; ex = `${b * q} ÷ ${b} = ${q}.`; }
+  return mq(i, 'Cân thăng bằng', text, ans, nearNums(ans, 1), { explain: ex }); }); };
+GENERATORS.clock = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), H = () => ri(1, 12), M = () => L === 1 ? 0 : L === 2 ? [0, 15, 30, 45][ri(0, 3)] : ri(0, 11) * 5, h = H(), m = M(), name = (a, b) => `${a} giờ${b ? ' ' + b + ' phút' : ''}`;
+  const wr = new Map(); wr.set(name(h, m), [h, m]); let g = 0; while (wr.size < 4 && g++ < 60) { const hh = Math.random() < .5 ? ((h + ri(1, 3) - 1) % 12) + 1 : h, mm = Math.random() < .5 || hh === h ? M() : m; const nn = name(hh, mm); if (!wr.has(nn)) wr.set(nn, [hh, mm]); }
+  if (i % 2 === 0) return mq(i, 'Xem đồng hồ', 'Đồng hồ chỉ mấy giờ?', name(h, m), [...wr.keys()].filter(x => x !== name(h, m)), { art: `svg:clock:${h}:${m}`, explain: `Kim ngắn chỉ ${h}${m ? ', kim dài chỉ ' + m + ' phút' : ' và kim dài chỉ số 12'}.` });
+  const tok = ([a, b]) => `svg:clock:${a}:${b}`; return mq(i, 'Xem đồng hồ', `Chọn đồng hồ chỉ ${name(h, m)}`, tok([h, m]), [...wr.entries()].filter(([k]) => k !== name(h, m)).map(([, v]) => tok(v)), { explain: `${name(h, m)}.` }); });
+GENERATORS.share = cfg => Array.from({ length: cfg.n }, (_, i) => { const L = lv(cfg), foods = [['🍪', 'cái bánh quy'], ['🍬', 'viên kẹo'], ['🍎', 'quả táo'], ['🍓', 'quả dâu']], [e, nm] = foods[ri(0, 3)];
+  let k, per, rem = 0, text, ans, ex; if (L === 1) { k = ri(2, 3); per = ri(2, 4); } else { k = ri(2, 6); per = ri(2, 6); if (L === 3) rem = ri(1, k - 1); }
+  const total = k * per + rem; if (L < 3) { text = `${total} ${nm} chia đều cho ${k} bạn. Mỗi bạn được mấy ${nm.split(' ').slice(0, 1)[0] === 'cái' ? 'cái' : nm.split(' ')[0]}?`; ans = per; ex = `${total} ÷ ${k} = ${per}.`; }
+  else { text = `${total} ${nm} chia cho ${k} bạn, mỗi bạn được ${per} ${nm.split(' ')[0]}. Còn thừa mấy ${nm.split(' ')[0]}?`; ans = rem; ex = `${k} × ${per} = ${k * per}; ${total} − ${k * per} = ${rem}.`; }
+  return mq(i, 'Chia đều', text, ans, nearNums(ans, 0), { art: total <= 24 ? 'emoji:' + e.repeat(total) : '', explain: ex }); });
+
+GAMES.push(...[
+  ['n1', '🎲', 'Xúc xắc cộng vui', 'dice', 'mcq', 'Cộng số chấm trên các viên xúc xắc.', [0, 2]], ['n2', '↔️', 'Xếp hàng số', 'sortnum', 'order', 'Sắp xếp các số theo thứ tự bé đến lớn hoặc lớn đến bé.', [1, 3]],
+  ['n3', '⚖️', 'Đấu trường so sánh', 'cmpnum', 'mcq', 'So sánh hai số hoặc hai phép tính, chọn dấu >, <, =.', [1, 3]], ['n4', '🧮', 'Tách và gộp số', 'bonds', 'mcq', 'Tìm số còn thiếu khi tách một số thành hai số.', [0, 3]],
+  ['n5', '🧲', 'Tìm bạn cho số', 'pairs10', 'pairs', 'Nối các cặp số có tổng bằng 10, 20 hoặc 100.', [1, 3]], ['n6', '🎱', 'Bi-a cộng ba số', 'add3', 'mcq', 'Cộng ba số, chọn kết quả đúng.', [1, 3]],
+  ['n7', '🕵️', 'Thám tử trái cây', 'detective', 'mcq', 'Mỗi trái cây là một số. Suy ra số cần tìm từ các phép tính.', [1, 4]], ['n8', '🔢', 'Chẵn hay lẻ?', 'evenodd', 'mcq', 'Nhận biết số chẵn, số lẻ và tổng chẵn/lẻ.', [1, 4]],
+  ['n9', '🏗️', 'Phân tích số theo hàng', 'placeval', 'mcq', 'Tách số theo hàng chục, trăm, nghìn.', [1, 4]], ['n10', '➕', 'Cộng từng hàng', 'addplace', 'mcq', 'Cộng số lớn bằng cách tách theo hàng.', [2, 4]],
+  ['n11', '🔺', 'Tháp số', 'pyramid', 'mcq', 'Mỗi ô bằng tổng hai ô nằm dưới nó. Tìm ô có dấu ?', [2, 5]], ['n12', '🛠️', 'Cân thăng bằng', 'balance', 'mcq', 'Suy ra cân nặng của các con vật từ những phép cân.', [2, 5]],
+  ['n13', '🕒', 'Xem đồng hồ', 'clock', 'mcq', 'Đọc giờ trên đồng hồ kim, hoặc chọn đồng hồ đúng giờ.', [1, 3]], ['n14', '🍪', 'Chia đều bánh kẹo', 'share', 'mcq', 'Chia đều số bánh kẹo cho các bạn, có bài còn dư.', [2, 4]]
+].map(([id, icon, name, gen, engine, how, g]) => ({ id, subject: 'math', icon, name, engine, gen, noBank: true, g, ages: 'Lớp ' + Math.max(1, g[0]) + '–' + g[1], diff: [1, 3], opts: [LVL], how })));
+
+/* ---------------- In phiếu bài tập ---------------- */
+const Print = {
+  open() {
+    const sel = Bank.s.sel.size, n = Bank.filtered().filter(q => !q.deleted).length;
+    Modal.open(`<h2>🖨 In phiếu bài tập</h2><div class="seg"><label><input type="radio" name="pw-src" value="bank" checked><span>Từ ngân hàng câu hỏi<small>${sel ? `Dùng ${sel} câu đang chọn` : `Dùng các câu theo bộ lọc hiện tại (${n} câu)`}</small></span></label><label><input type="radio" name="pw-src" value="arith"><span>Phép tính tự sinh<small>Cộng, trừ, nhân, chia ngẫu nhiên</small></span></label></div>
+      <div class="row"><label class="field">Tiêu đề<input id="pw-t" value="Phiếu bài tập"></label><label class="field">Số câu<select id="pw-n"><option>10</option><option selected>15</option><option>20</option><option>30</option></select></label><label class="field">Cách trình bày<select id="pw-c"><option value="1">1 cột</option><option value="2" selected>2 cột</option></select></label></div>
+      <div id="pw-a" hidden><div class="row"><label class="switch"><input type="checkbox" id="pw-o1" checked>Cộng</label><label class="switch"><input type="checkbox" id="pw-o2" checked>Trừ</label><label class="switch"><input type="checkbox" id="pw-o3">Nhân</label><label class="switch"><input type="checkbox" id="pw-o4">Chia</label></div>
+        <label class="field" style="max-width:260px">Phạm vi số<select id="pw-r"><option value="10">Trong 10</option><option value="20" selected>Trong 20</option><option value="100">Trong 100</option><option value="1000">Trong 1000 (cộng/trừ)</option></select></label></div>
+      <label class="switch"><input type="checkbox" id="pw-k" checked>Thêm trang đáp án cho giáo viên</label><div class="acts"><button class="btn sec" data-act="closemodal">Hủy</button><button class="btn go" id="pw-go">🖨 Tạo và in</button></div>`);
+    $$('input[name=pw-src]').forEach(r => r.onchange = () => { $('#pw-a').hidden = $('input[name=pw-src]:checked').value !== 'arith'; });
+    $('#pw-go').onclick = () => { const o = { src: $('input[name=pw-src]:checked').value, title: $('#pw-t').value.trim() || 'Phiếu bài tập', n: +$('#pw-n').value, cols: +$('#pw-c').value, key: $('#pw-k').checked, ops: [1, 2, 3, 4].filter(k => $('#pw-o' + k).checked), range: +$('#pw-r').value }; if (this.build(o)) { Modal.close(); setTimeout(() => window.print(), 250); } };
+  },
+  arith(o) {
+    const out = []; const sym = ['+', '−', '×', '÷']; const ops = o.ops.length ? o.ops : [1];
+    for (let i = 0; i < o.n; i++) { const k = ops[ri(0, ops.length - 1)]; let a, b, r; const R = o.range;
+      if (k === 1) { a = ri(1, R - 1); b = ri(1, Math.max(1, R - a)); r = a + b; } else if (k === 2) { a = ri(2, R); b = ri(1, a); r = a - b; } else if (k === 3) { const m = R >= 100 ? 9 : R >= 20 ? 5 : 3; a = ri(2, m); b = ri(2, 9); r = a * b; } else { b = ri(2, 9); r = ri(2, Math.max(2, Math.floor((R >= 100 ? 90 : R) / b))); a = b * r; }
+      out.push({ q: `${a} ${sym[k - 1]} ${b} = `, a: String(r), blank: true }); }
+    return out;
+  },
+  bankItem(q, i) {
+    const L = 'ABCDEF'; let body = '', ans = '';
+    const art = Shapes.art(q.art || ''), img = q.image ? `<img src="${q.image}" alt="">` : '';
+    if (q.type === 'mcq') { body = `${img}${art}<div class="ws-opts">${q.options.map((o, k) => `<span>${L[k]}. ${Shapes.isTok(o) ? Shapes.opt(o) : esc(o)}</span>`).join('')}</div>`; ans = q.answer != null && q.options[q.answer] != null ? `${L[q.answer]}. ${Shapes.isTok(q.options[q.answer]) ? '(hình)' : q.options[q.answer]}` : '?'; }
+    else if (q.type === 'count') { body = `<div style="font-size:20pt;letter-spacing:4px">${esc(q.emoji.repeat(q.answer))}</div><div>Có <span class="ws-blank"></span> ${esc(q.emoji)}</div>`; ans = String(q.answer); }
+    else if (q.type === 'word') { body = `<div>${esc(q.emoji || '')} ${esc(shuffle(Array.from(q.answer)).join(' / '))}</div><div>Từ đúng: <span class="ws-blank" style="min-width:140px"></span></div>`; ans = q.answer; }
+    else if (q.type === 'order') { body = `<div>${shuffle(q.items).map(x => `<span style="margin-right:14px">[ ${esc(x)} ]</span>`).join('')}</div><div>Thứ tự đúng: <span class="ws-blank" style="min-width:260px"></span></div>`; ans = q.items.join(' → '); }
+    else if (q.type === 'pairs') { const R = shuffle(q.pairs.map(p => p[1])); body = `<div style="display:flex;gap:60px"><div>${q.pairs.map((p, k) => `<div>${k + 1}. ${esc(p[0])}</div>`).join('')}</div><div>${R.map((x, k) => `<div>${'abcdef'[k]}. ${esc(x)}</div>`).join('')}</div></div><div>Ghép: <span class="ws-blank" style="min-width:200px"></span></div>`; ans = q.pairs.map((p, k) => `${k + 1}-${'abcdef'[R.indexOf(p[1])]}`).join(', '); }
+    else if (q.type === 'sort') { body = `<div>${shuffle(q.sitems).map(x => `<span style="margin-right:14px">${esc(x[0])}</span>`).join('')}</div><div>${q.cats.map(c => `${esc(c)}: <span class="ws-blank" style="min-width:150px"></span>`).join('  ')}</div>`; ans = q.cats.map((c, k) => `${c}: ${q.sitems.filter(x => x[1] === k).map(x => x[0]).join(' ')}`).join('; '); }
+    return { html: `<div class="ws-q"><b>Câu ${i + 1}.</b> ${q.type === 'word' ? 'Ghép các chữ cái thành từ đúng.' : esc(q.text)}${body}</div>`, a: ans };
+  },
+  build(o) {
+    let rows = [];
+    if (o.src === 'arith') { rows = this.arith(o).map((x, i) => ({ html: `<div class="ws-q"><b>${i + 1}.</b> ${esc(x.q)}<span class="ws-blank"></span></div>`, a: x.a })); }
+    else { let list = Bank.s.sel.size ? [...Bank.s.sel].map(id => State.q(id)).filter(Boolean) : Bank.filtered(); list = list.filter(q => !q.deleted && !q.speak && (q.type !== 'mcq' || q.answer != null)); list = shuffle(list).slice(0, o.n); if (!list.length) { toast('Không có câu hỏi nào để in. Hãy đổi bộ lọc hoặc chọn câu.', 'err'); return false; } rows = list.map((q, i) => this.bankItem(q, i)); }
+    const head = `<h1>${esc(o.title)}</h1><div class="ws-meta"><span>Họ và tên: ______________________</span><span>Lớp: ________</span><span>Ngày: ___/___/______</span></div>`;
+    let html = `<div class="ws-page">${head}<div class="ws-cols c${o.cols}">${rows.map(r => r.html).join('')}</div></div>`;
+    if (o.key) html += `<div class="ws-page"><h1>Đáp án – ${esc(o.title)}</h1><div class="ws-ans">${rows.map((r, i) => `<div><b>${i + 1}.</b> ${esc(String(r.a))}</div>`).join('')}</div></div>`;
+    $('#printarea').innerHTML = html; return true;
+  }
+};
+Act.bprint = () => Print.open();
+window.addEventListener('afterprint', () => { const p = $('#printarea'); if (p) p.innerHTML = ''; });
 </script>
 </body>
 </html>
