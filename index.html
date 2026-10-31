@@ -321,18 +321,6 @@ canvas.fog{position:absolute;z-index:4;pointer-events:none;border-radius:0}.fogs
 
 .qtext{white-space:pre-line}.artgrid .gap{visibility:hidden;border-color:transparent;background:transparent}
 .artsvg .shp{max-width:190px}
-#printarea{display:none}
-@media print{
-  html,body{background:#fff!important;height:auto}
-  #app,#toasts,dialog,#vcursor,#trail{display:none!important}
-  #printarea{display:block!important;color:#000;font-family:'Nunito','Segoe UI',sans-serif;font-size:13pt}
-  .ws-page{page-break-after:always}.ws-page:last-child{page-break-after:auto}
-  @page{margin:14mm}
-}
-#printarea h1{font-size:20pt;margin:0 0 4px;text-align:center}.ws-meta{display:flex;justify-content:space-between;gap:16px;margin:6px 0 14px;font-size:12pt}
-.ws-cols{column-gap:28px}.ws-cols.c2{columns:2}.ws-q{break-inside:avoid;margin:0 0 14px}.ws-q b{font-weight:800}.ws-opts{display:flex;flex-wrap:wrap;gap:4px 22px;margin:3px 0 0 18px}.ws-q .shp{max-width:90px;display:inline-block;vertical-align:middle}
-.ws-blank{display:inline-block;min-width:70px;border-bottom:1.5px solid #000;margin-left:6px}.ws-grid{display:inline-grid;gap:4px;margin:4px 0}.ws-grid span{border:1.5px solid #000;min-width:30px;height:30px;display:grid;place-items:center;font-size:12pt}
-.ws-ans{font-size:12pt;columns:2;column-gap:24px}.ws-ans div{break-inside:avoid;margin:2px 0}.ws-q img{max-height:130px;display:block;margin:4px 0}
 </style>
 </head>
 <body>
@@ -340,7 +328,6 @@ canvas.fog{position:absolute;z-index:4;pointer-events:none;border-radius:0}.fogs
 <div id="toasts" aria-live="polite"></div><dialog id="modal"></dialog><dialog id="ask"></dialog>
 <div id="vcursor"></div><canvas id="trail"></canvas>
 <input type="file" id="imp" accept=".csv,.json,text/csv,application/json" hidden><input type="file" id="rst" accept=".json,application/json" hidden>
-<div id="printarea"></div>
 <noscript>Ứng dụng cần bật JavaScript.</noscript>
 <script>
 'use strict';
@@ -1396,7 +1383,7 @@ const Bank = {
   view() {
     const s = this.s; s.sel.clear(); const opt = (obj, v) => Object.entries(obj).map(([k, x]) => `<option value="${k}" ${String(v) === k ? 'selected' : ''}>${typeof x === 'string' ? x : x.name}</option>`).join('');
     $('#main').innerHTML = `${App.banner()}<div class="view-head"><div class="grow"><h1>🗃️ Ngân hàng câu hỏi</h1><p>Chỉ những câu có trạng thái “Đã duyệt” mới xuất hiện trong trò chơi. Câu nhập từ file mặc định là “Cần giáo viên kiểm tra”.</p></div>
-      <div class="row"><button class="btn go" data-act="badd">＋ Thêm câu hỏi</button><button class="btn sec" data-act="bimport">⬆ Nhập CSV/JSON</button><button class="btn sec" data-act="bexp" data-f="csv">⬇ CSV</button><button class="btn sec" data-act="bexp" data-f="json">⬇ JSON</button><button class="btn sec" data-act="btpl">Tải file CSV mẫu</button><button class="btn sec" data-act="bprint">🖨 In phiếu bài tập</button></div></div>
+      <div class="row"><button class="btn go" data-act="badd">＋ Thêm câu hỏi</button><button class="btn sec" data-act="bimport">⬆ Nhập CSV/JSON</button><button class="btn sec" data-act="bexp" data-f="csv">⬇ CSV</button><button class="btn sec" data-act="bexp" data-f="json">⬇ JSON</button><button class="btn sec" data-act="btpl">Tải file CSV mẫu</button></div></div>
       <div class="filters"><label class="field" style="flex:1;min-width:200px">Tìm kiếm (không cần gõ dấu)<input data-bind="bank.q" data-refresh="bank" value="${esc(s.q)}" placeholder="nội dung, từ khóa, chủ đề, thẻ"></label>
       <label class="field">Môn<select data-bind="bank.subject" data-refresh="bank"><option value="">Tất cả</option>${opt(SUBJECTS, s.subject)}</select></label>
       <label class="field">Lớp<select data-bind="bank.grade" data-refresh="bank"><option value="">Tất cả</option>${opt(GRADES, s.grade)}</select></label>
@@ -2606,7 +2593,7 @@ function buildSeed4() {
   return out;
 }
 /* =====================================================================
-   Lô trò Toán tự sinh (3 mức độ) và chức năng in phiếu bài tập
+   Lô trò Toán tự sinh (3 mức độ)
    Mọi đáp án đều được máy tự tính, không cần ngân hàng câu hỏi.
    ===================================================================== */
 const LVL = { key: 'lvl', label: 'Mức độ', vals: [[1, 'Dễ'], [2, 'Vừa'], [3, 'Khó']], def: 1 };
@@ -2684,49 +2671,6 @@ GAMES.push(...[
   ['n11', '🔺', 'Tháp số', 'pyramid', 'mcq', 'Mỗi ô bằng tổng hai ô nằm dưới nó. Tìm ô có dấu ?', [2, 5]], ['n12', '🛠️', 'Cân thăng bằng', 'balance', 'mcq', 'Suy ra cân nặng của các con vật từ những phép cân.', [2, 5]],
   ['n13', '🕒', 'Xem đồng hồ', 'clock', 'mcq', 'Đọc giờ trên đồng hồ kim, hoặc chọn đồng hồ đúng giờ.', [1, 3]], ['n14', '🍪', 'Chia đều bánh kẹo', 'share', 'mcq', 'Chia đều số bánh kẹo cho các bạn, có bài còn dư.', [2, 4]]
 ].map(([id, icon, name, gen, engine, how, g]) => ({ id, subject: 'math', icon, name, engine, gen, noBank: true, g, ages: 'Lớp ' + Math.max(1, g[0]) + '–' + g[1], diff: [1, 3], opts: [LVL], how })));
-
-/* ---------------- In phiếu bài tập ---------------- */
-const Print = {
-  open() {
-    const sel = Bank.s.sel.size, n = Bank.filtered().filter(q => !q.deleted).length;
-    Modal.open(`<h2>🖨 In phiếu bài tập</h2><div class="seg"><label><input type="radio" name="pw-src" value="bank" checked><span>Từ ngân hàng câu hỏi<small>${sel ? `Dùng ${sel} câu đang chọn` : `Dùng các câu theo bộ lọc hiện tại (${n} câu)`}</small></span></label><label><input type="radio" name="pw-src" value="arith"><span>Phép tính tự sinh<small>Cộng, trừ, nhân, chia ngẫu nhiên</small></span></label></div>
-      <div class="row"><label class="field">Tiêu đề<input id="pw-t" value="Phiếu bài tập"></label><label class="field">Số câu<select id="pw-n"><option>10</option><option selected>15</option><option>20</option><option>30</option></select></label><label class="field">Cách trình bày<select id="pw-c"><option value="1">1 cột</option><option value="2" selected>2 cột</option></select></label></div>
-      <div id="pw-a" hidden><div class="row"><label class="switch"><input type="checkbox" id="pw-o1" checked>Cộng</label><label class="switch"><input type="checkbox" id="pw-o2" checked>Trừ</label><label class="switch"><input type="checkbox" id="pw-o3">Nhân</label><label class="switch"><input type="checkbox" id="pw-o4">Chia</label></div>
-        <label class="field" style="max-width:260px">Phạm vi số<select id="pw-r"><option value="10">Trong 10</option><option value="20" selected>Trong 20</option><option value="100">Trong 100</option><option value="1000">Trong 1000 (cộng/trừ)</option></select></label></div>
-      <label class="switch"><input type="checkbox" id="pw-k" checked>Thêm trang đáp án cho giáo viên</label><div class="acts"><button class="btn sec" data-act="closemodal">Hủy</button><button class="btn go" id="pw-go">🖨 Tạo và in</button></div>`);
-    $$('input[name=pw-src]').forEach(r => r.onchange = () => { $('#pw-a').hidden = $('input[name=pw-src]:checked').value !== 'arith'; });
-    $('#pw-go').onclick = () => { const o = { src: $('input[name=pw-src]:checked').value, title: $('#pw-t').value.trim() || 'Phiếu bài tập', n: +$('#pw-n').value, cols: +$('#pw-c').value, key: $('#pw-k').checked, ops: [1, 2, 3, 4].filter(k => $('#pw-o' + k).checked), range: +$('#pw-r').value }; if (this.build(o)) { Modal.close(); setTimeout(() => window.print(), 250); } };
-  },
-  arith(o) {
-    const out = []; const sym = ['+', '−', '×', '÷']; const ops = o.ops.length ? o.ops : [1];
-    for (let i = 0; i < o.n; i++) { const k = ops[ri(0, ops.length - 1)]; let a, b, r; const R = o.range;
-      if (k === 1) { a = ri(1, R - 1); b = ri(1, Math.max(1, R - a)); r = a + b; } else if (k === 2) { a = ri(2, R); b = ri(1, a); r = a - b; } else if (k === 3) { const m = R >= 100 ? 9 : R >= 20 ? 5 : 3; a = ri(2, m); b = ri(2, 9); r = a * b; } else { b = ri(2, 9); r = ri(2, Math.max(2, Math.floor((R >= 100 ? 90 : R) / b))); a = b * r; }
-      out.push({ q: `${a} ${sym[k - 1]} ${b} = `, a: String(r), blank: true }); }
-    return out;
-  },
-  bankItem(q, i) {
-    const L = 'ABCDEF'; let body = '', ans = '';
-    const art = Shapes.art(q.art || ''), img = q.image ? `<img src="${q.image}" alt="">` : '';
-    if (q.type === 'mcq') { body = `${img}${art}<div class="ws-opts">${q.options.map((o, k) => `<span>${L[k]}. ${Shapes.isTok(o) ? Shapes.opt(o) : esc(o)}</span>`).join('')}</div>`; ans = q.answer != null && q.options[q.answer] != null ? `${L[q.answer]}. ${Shapes.isTok(q.options[q.answer]) ? '(hình)' : q.options[q.answer]}` : '?'; }
-    else if (q.type === 'count') { body = `<div style="font-size:20pt;letter-spacing:4px">${esc(q.emoji.repeat(q.answer))}</div><div>Có <span class="ws-blank"></span> ${esc(q.emoji)}</div>`; ans = String(q.answer); }
-    else if (q.type === 'word') { body = `<div>${esc(q.emoji || '')} ${esc(shuffle(Array.from(q.answer)).join(' / '))}</div><div>Từ đúng: <span class="ws-blank" style="min-width:140px"></span></div>`; ans = q.answer; }
-    else if (q.type === 'order') { body = `<div>${shuffle(q.items).map(x => `<span style="margin-right:14px">[ ${esc(x)} ]</span>`).join('')}</div><div>Thứ tự đúng: <span class="ws-blank" style="min-width:260px"></span></div>`; ans = q.items.join(' → '); }
-    else if (q.type === 'pairs') { const R = shuffle(q.pairs.map(p => p[1])); body = `<div style="display:flex;gap:60px"><div>${q.pairs.map((p, k) => `<div>${k + 1}. ${esc(p[0])}</div>`).join('')}</div><div>${R.map((x, k) => `<div>${'abcdef'[k]}. ${esc(x)}</div>`).join('')}</div></div><div>Ghép: <span class="ws-blank" style="min-width:200px"></span></div>`; ans = q.pairs.map((p, k) => `${k + 1}-${'abcdef'[R.indexOf(p[1])]}`).join(', '); }
-    else if (q.type === 'sort') { body = `<div>${shuffle(q.sitems).map(x => `<span style="margin-right:14px">${esc(x[0])}</span>`).join('')}</div><div>${q.cats.map(c => `${esc(c)}: <span class="ws-blank" style="min-width:150px"></span>`).join('  ')}</div>`; ans = q.cats.map((c, k) => `${c}: ${q.sitems.filter(x => x[1] === k).map(x => x[0]).join(' ')}`).join('; '); }
-    return { html: `<div class="ws-q"><b>Câu ${i + 1}.</b> ${q.type === 'word' ? 'Ghép các chữ cái thành từ đúng.' : esc(q.text)}${body}</div>`, a: ans };
-  },
-  build(o) {
-    let rows = [];
-    if (o.src === 'arith') { rows = this.arith(o).map((x, i) => ({ html: `<div class="ws-q"><b>${i + 1}.</b> ${esc(x.q)}<span class="ws-blank"></span></div>`, a: x.a })); }
-    else { let list = Bank.s.sel.size ? [...Bank.s.sel].map(id => State.q(id)).filter(Boolean) : Bank.filtered(); list = list.filter(q => !q.deleted && !q.speak && (q.type !== 'mcq' || q.answer != null)); list = shuffle(list).slice(0, o.n); if (!list.length) { toast('Không có câu hỏi nào để in. Hãy đổi bộ lọc hoặc chọn câu.', 'err'); return false; } rows = list.map((q, i) => this.bankItem(q, i)); }
-    const head = `<h1>${esc(o.title)}</h1><div class="ws-meta"><span>Họ và tên: ______________________</span><span>Lớp: ________</span><span>Ngày: ___/___/______</span></div>`;
-    let html = `<div class="ws-page">${head}<div class="ws-cols c${o.cols}">${rows.map(r => r.html).join('')}</div></div>`;
-    if (o.key) html += `<div class="ws-page"><h1>Đáp án – ${esc(o.title)}</h1><div class="ws-ans">${rows.map((r, i) => `<div><b>${i + 1}.</b> ${esc(String(r.a))}</div>`).join('')}</div></div>`;
-    $('#printarea').innerHTML = html; return true;
-  }
-};
-Act.bprint = () => Print.open();
-window.addEventListener('afterprint', () => { const p = $('#printarea'); if (p) p.innerHTML = ''; });
 </script>
 </body>
 </html>
